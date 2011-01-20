@@ -65,14 +65,17 @@ endif (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 # configure-time detection code later.
 
 include_directories (
-  .
-  ../stanford-wbc/tao
-  ../stanford-wbc/jspace
+  stanford_wbc/jspace
   )
 
 link_directories (
-  ../stanford-wbc/build/tao
-  ../stanford-wbc/build/jspace
+  )
+
+##################################################
+# descend into subprojects
+
+add_subdirectory (
+  stanford_wbc
   )
 
 ##################################################
@@ -83,3 +86,4 @@ target_link_libraries (utaustin-wbc jspace)
 
 # add_executable (testOpspace testOpspace.cpp)
 # target_link_libraries (testOpspace utaustin-wbc gtest)
+
