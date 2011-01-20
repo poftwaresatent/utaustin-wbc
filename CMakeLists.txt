@@ -61,29 +61,10 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 endif (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 
 ##################################################
-# hardcoded header and library paths will need to be replaced by
-# configure-time detection code later.
-
-include_directories (
-  stanford_wbc/jspace
-  )
-
-link_directories (
-  )
-
-##################################################
 # descend into subprojects
+# NOTE: add new subprojects here!
 
-add_subdirectory (
+subdirs (
   stanford_wbc
+  opspace
   )
-
-##################################################
-# sources and targets for the UTAustin-WBC project
-
-add_library (utaustin-wbc SHARED opspace/opspace.cpp)
-target_link_libraries (utaustin-wbc jspace)
-
-# add_executable (testOpspace testOpspace.cpp)
-# target_link_libraries (testOpspace utaustin-wbc gtest)
-
