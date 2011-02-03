@@ -67,4 +67,5 @@ endif (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 subdirs (
   stanford_wbc
   opspace
+  apps
   )
