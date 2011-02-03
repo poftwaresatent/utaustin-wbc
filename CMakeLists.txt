@@ -61,11 +61,32 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 endif (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 
 ##################################################
+# detection of Meka / RTAI code
+
+include (CheckIncludeFileCXX)
+if (M3_DIR)
+  list (APPEND CMAKE_REQUIRED_INCLUDES ${M3_DIR}/src ${M3_DIR})
+  include_directories (${M3_DIR}/src ${M3_DIR})
+  ###  link_directories (${M3_DIR}/lib ${M3_DIR})
+endif (M3_DIR)
+check_include_file_cxx (m3/shared_mem/torque_shm_sds.h HAVE_M3_SHM_HEADER)
+if (${HAVE_M3_SHM_HEADER})
+  message ("*** enabling Meka / RTAI")
+  set (HAVE_M3 TRUE)
+  add_definitions (-DHAVE_M3)
+else (${HAVE_M3_SHM_HEADER})
+  message ("--- Meka / RTAI not found (optional)")
+endif (${HAVE_M3_SHM_HEADER})
+
+##################################################
 # descend into subprojects
 # NOTE: add new subprojects here!
 
 subdirs (
   stanford_wbc
   opspace
-  apps
   )
+
+if (HAVE_M3)
+  subdirs (apps)
+endif (HAVE_M3)

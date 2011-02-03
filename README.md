@@ -30,6 +30,54 @@ Finally, see if you can run the test:
 
     ./opspace/testTask
 
+Running the RTAI shmem controller on the Meka arm
+-------------------------------------------------
+
+Make sure you have correctly configured your M3_ROBOT environment
+variable in all shells, e.g. by placing something like this into your
+~/.bashrc:
+
+    export M3_ROBOT=/home/meka/mekabot/m3uta
+
+Build the entire utaustin-wbc in release mode, pointing it to the
+Meka/RTAI sources:
+
+    mkdir release
+    cd release
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DM3_DIR=/home/meka/mekabot/m3
+    make
+
+Start the Meka/RTAI controller:
+
+    m3rt_server_run
+
+Start the script which switches the controller to shared memory mode:
+
+    /path/to/opspace/apps/m3_torque_shm.py
+   
+This should create some messages from the Meka/RTAI controller as
+well. Hit ENTER to continue in the `m3_torque_shm.py` terminal.
+
+Start the `m3_servo` program, for instance in gravity compensation
+mode (which is the default) with a bit of damping. Use the `-h` option
+for more details:
+
+    /path/to/opspace/release/apps/m3_servo -l float -d '2 2 2 2  1 1 1'
+
+Make sure the robot's safety button is OFF. Back in the
+`m3_torque_shm.py` terminal, hit the `a` key. Hold on to the robot and
+switch the safety button on.
+
+The following **shutdown sequence** needs to be strictly followed in
+order to avoid creating zombie RTAI processes:
+
+ 1. Hit `q` in the `m3_torque_shm.py` terminal.
+ 2. Hit Ctrl-C in the `m3_servo` terminal.
+ 3. Hit Ctrl-C in the `m3rt_server_run` terminal.
+ 4. Run `m3rt_server_kill` if that fails (or run it all the time
+    anyway just for good measure).
+
+
 License
 -------
 
