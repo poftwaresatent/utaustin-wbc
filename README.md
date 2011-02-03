@@ -9,6 +9,30 @@ in order to provide operational-space control for robots interacting
 physically with everyday environments. The main developers are Luis
 Sentis and Roland Philippsen.
 
+Getting Started
+---------------
+
+Grab the code like this:
+
+    git clone git://github.com/poftwaresatent/utaustin-wbc.git
+    cd utaustin-wbc
+    git submodule init
+    git submodule update
+
+And then build it like so:
+
+    mkdir build
+    cd build
+    cmake ..
+    make
+
+Finally, see if you can run the test:
+
+    ./opspace/testTask
+
+License
+-------
+
 The `utaustin-wbc` project is released under a new-style BSD
 license. Most of it is Copyright (C) University of Texas at Austin.
 
