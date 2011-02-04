@@ -84,6 +84,7 @@ endif (${HAVE_M3_SHM_HEADER})
 
 subdirs (
   stanford_wbc
+  reflexxes_otg
   opspace
   )
 
