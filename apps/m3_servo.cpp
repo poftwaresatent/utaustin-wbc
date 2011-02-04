@@ -66,9 +66,13 @@
 #include <signal.h>
 #include <err.h>
 
-// For now we more or less hardcode the location of the M3
-// codebase. This should definitely be detected by CMake or other
-// configuration system.
+// The top-level CMakeLists.txt file tries to find the
+// torque_shm_sds.h header file underneath ${M3_DIR}/src and
+// ${M3_DIR}. So, for example if your M3 code lives in
+// /home/meka/mekabot/m3, you should run cmake like this:
+// 
+//   cmake /path/to/utaustin-wbc -DM3_DIR=/home/meka/mekabot/m3
+// 
 #include "m3/shared_mem/torque_shm_sds.h"
 #include "m3/robots/chain_name.h"
 #include <m3rt/base/m3ec_def.h>
@@ -174,7 +178,6 @@ static controller_lib_t controller_lib;
 static controller_doc_t controller_doc;
 static jspace::Controller * controller;
 static std::string controller_errstr;
-////static bool controllers_initialized(false);
 static boost::shared_ptr<jspace::Model> model;
 
 static jspace::Matrix dbg_invLambda_t, dbg_Lambda_t;
@@ -466,7 +469,7 @@ static void StepTaskPosture(jspace::Model const & model, jspace::Vector & tau)
 
 
 
-////////////////////////// RTAI PROCESS BOILERPLATE /////////////////////////////
+////////////////////////// RTAI PROCESS /////////////////////////////
 
 static void* rt_system_thread(void * arg)
 {	
