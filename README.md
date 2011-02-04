@@ -77,6 +77,10 @@ order to avoid creating zombie RTAI processes:
  4. Run `m3rt_server_kill` if that fails (or run it all the time
     anyway just for good measure).
 
+Run the following to get the "vertical wall sweeping example" (see
+http://www.youtube.com/watch?v=bU7Ocphhifg):
+
+    ./apps/m3_servo -t -g "0.4 -0.2 -0.2    0 45 0 60    0 0 0" -p "150 150 150     100 100 100 100    100 100 100 " -d "20 20 20   5 5 5 5   25 25 25"
 
 License
 -------

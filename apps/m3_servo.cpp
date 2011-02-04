@@ -162,7 +162,8 @@ static std::string controller_errstr;
 ////static bool controllers_initialized(false);
 static boost::shared_ptr<jspace::Model> model;
 
-static jspace::Matrix dbg_invLambda_p, dbg_S, dbg_Sinv, dbg_Lambda_p;
+static jspace::Matrix dbg_invLambda_t, dbg_Lambda_t;
+static jspace::Matrix dbg_invLambda_p, dbg_Lambda_p;
 
 /** Called from within get_controller(), so probably you do not need
     to call it yourself. */
@@ -296,8 +297,22 @@ static void StepTaskPosture(jspace::Model const & model, jspace::Vector & tau)
   jspace::Matrix Jx(Jfull.block(0, 0, 3, 7));
   jspace::Matrix invA;
   model.getInverseMassInertia(invA);
-  jspace::Matrix invLambda(Jx * invA * Jx.transpose());
-  jspace::Matrix Lambda(invLambda.inverse());
+  jspace::Matrix invLambda_t(Jx * invA * Jx.transpose());
+
+  Eigen::SVD<jspace::Matrix> svdLambda_t(invLambda_t);
+  svdLambda_t.sort();
+  int const nrows_t(svdLambda_t.singularValues().rows());
+  jspace::Matrix Sinv_t;
+  Sinv_t = jspace::Matrix::Zero(nrows_t, nrows_t);
+  for (int ii(0); ii < nrows_t; ++ii) {
+    if (svdLambda_t.singularValues().coeff(ii) > 1e-3) {
+      Sinv_t.coeffRef(ii, ii) = 1.0 / svdLambda_t.singularValues().coeff(ii);
+    }
+  }
+  jspace::Matrix Lambda_t(svdLambda_t.matrixU() * Sinv_t * svdLambda_t.matrixU().transpose());
+  
+  dbg_invLambda_t = invLambda_t;
+  dbg_Lambda_t = Lambda_t;
   
   static jspace::Vector eegoal0;
   if (0 == eegoal0.size()) {
@@ -335,25 +350,15 @@ static void StepTaskPosture(jspace::Model const & model, jspace::Vector & tau)
     }
   }
 
-  jspace::Matrix bar;
-  bar = Jx * model.getState().velocity_;
-  bar = eegain_kd.cwise() * bar;
-  jspace::Matrix foo;
-  foo = eegain_kp.cwise() * poserror;
-  bar = foo + bar;
-  bar = (-Lambda) * bar;
-  bar = Jx.transpose() * bar;
-
   jspace::Vector
-    tau_task(Jx.transpose() * (-Lambda)
+    tau_task(Jx.transpose() * (-Lambda_t)
 	     * ( eegain_kp.cwise() * poserror
 		 + eegain_kd.cwise() * Jx * model.getState().velocity_));
-  ///  tau_task = bar;
   
   //////////////////////////////////////////////////
   // posture
   
-  jspace::Matrix Jbar(invA * Jx.transpose() * Lambda);
+  jspace::Matrix Jbar(invA * Jx.transpose() * Lambda_t);
   jspace::Matrix nullspace(jspace::Matrix::Identity(7, 7) - Jbar * Jx);
   
   static jspace::Vector goalposture;
@@ -369,23 +374,21 @@ static void StepTaskPosture(jspace::Model const & model, jspace::Vector & tau)
     }
   }
   jspace::Matrix invLambda_p(nullspace * invA);
-  Eigen::SVD<jspace::Matrix> svdLambda(invLambda_p);
+  Eigen::SVD<jspace::Matrix> svdLambda_p(invLambda_p);
 
-  svdLambda.sort();
+  svdLambda_p.sort();
   
-  int const nrows(svdLambda.singularValues().rows());
-  jspace::Matrix Sinv;
-  Sinv = jspace::Matrix::Zero(nrows, nrows);
-  for (int ii(0); ii < nrows; ++ii) {
-    if (svdLambda.singularValues().coeff(ii) > 1e-3) {
-      Sinv.coeffRef(ii, ii) = 1.0 / svdLambda.singularValues().coeff(ii);
+  int const nrows_p(svdLambda_p.singularValues().rows());
+  jspace::Matrix Sinv_p;
+  Sinv_p = jspace::Matrix::Zero(nrows_p, nrows_p);
+  for (int ii(0); ii < nrows_p; ++ii) {
+    if (svdLambda_p.singularValues().coeff(ii) > 1e-3) {
+      Sinv_p.coeffRef(ii, ii) = 1.0 / svdLambda_p.singularValues().coeff(ii);
     }
   }
-  jspace::Matrix Lambda_p(svdLambda.matrixU() * Sinv * svdLambda.matrixU().transpose());
+  jspace::Matrix Lambda_p(svdLambda_p.matrixU() * Sinv_p * svdLambda_p.matrixU().transpose());
   
   dbg_invLambda_p = invLambda_p;
-  dbg_S = svdLambda.singularValues();
-  dbg_Sinv = Sinv;
   dbg_Lambda_p = Lambda_p;
   
   static jspace::Vector posturegain_kp, posturegain_kd;
@@ -931,12 +934,15 @@ int main (int argc, char ** argv)
 	}
 	printf("\n");
 	
-	jspace::pretty_print(dbg_invLambda_p, cout, "invLambda", "  ");
-	jspace::pretty_print(dbg_S, cout, "S", "  ");
-	jspace::pretty_print(dbg_Sinv, cout, "Sinv", "  ");
+	jspace::pretty_print(dbg_invLambda_t, cout, "invLambda_t", "  ");
+	jspace::pretty_print(dbg_Lambda_t, cout, "Lambda_t", "  ");
+	jspace::Matrix check_t(dbg_Lambda_t * dbg_invLambda_t);
+	jspace::pretty_print(check_t, cout, "Lambda_t * invLambda_t", "  ");
+	
+	jspace::pretty_print(dbg_invLambda_p, cout, "invLambda_p", "  ");
 	jspace::pretty_print(dbg_Lambda_p, cout, "Lambda_p", "  ");
-	jspace::Matrix check(dbg_Lambda_p * dbg_invLambda_p);
-	jspace::pretty_print(check, cout, "Lambda_p * invLambda_p", "  ");
+	jspace::Matrix check_p(dbg_Lambda_p * dbg_invLambda_p);
+	jspace::pretty_print(check_p, cout, "Lambda_p * invLambda_p", "  ");
 	
       }
 
