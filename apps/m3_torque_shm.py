@@ -7,7 +7,6 @@
 #Redistribution and use in source and binary forms, with or without
 #modification, are permitted. 
 
-
 #THIS SOFTWARE IS PROVIDED BY THE Copyright HOLDERS AND CONTRIBUTORS
 #"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 #LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -39,10 +38,10 @@ stiffness = [0.8]*7
 bot.initialize(proxy)
 proxy.step()
 
-print '------------------------------------------------------------------------------------------------'
-print 'Switch between a M3 THETA_GC controller and a Shared Memory TORQUE_SHM controller.'
+print '-------------------------------------------'
+print 'Switch between a M3 THETA_GC controller'
+print 'and a Shared Memory TORQUE_SHM controller.'
 print 'Hit enter to continue'
-print '------------------------------------------------------------------------------------------------'
 
 raw_input()
 proxy.step()
@@ -83,9 +82,10 @@ while k != 'q':
         print 'we only have seven joints to play with...'
     except ValueError:
       print 'oops, "%s" is not a number' % k
-  print "press any key, or Q to quit."
+  print "press any key, or q to quit."
   k=m3t.get_keystroke()
   
+print 'Switching off arm'
 bot.set_mode_off('right_arm')
 proxy.step()
 proxy.stop()
