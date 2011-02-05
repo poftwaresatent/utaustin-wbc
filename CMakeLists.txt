@@ -1,7 +1,9 @@
-cmake_minimum_required (VERSION 2.6.5)
+cmake_minimum_required (VERSION 2.6.2)
 if (COMMAND CMAKE_POLICY)
   # CMP0015: link_directories() treats paths relative to the source dir
-  cmake_policy (SET CMP0015 NEW)
+  if(POLICY CMP0015)
+    cmake_policy (SET CMP0015 NEW)
+  endif(POLICY CMP0015)
 endif (COMMAND CMAKE_POLICY)
 
 project (utaustin-wbc)
@@ -61,9 +63,36 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 endif (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 
 ##################################################
-# detection of Meka / RTAI code
+# configure dependencies
 
 include (CheckIncludeFileCXX)
+
+# find Eigen2 (annoyingly, this is copy-pasted from the stanford_wbc subdirectory)
+
+if (EIGEN2_DIR)
+  list (APPEND CMAKE_REQUIRED_INCLUDES
+    ${EIGEN2_DIR}/include
+    ${EIGEN2_DIR}
+    ${EIGEN2_DIR}/include/eigen2
+    ${EIGEN2_DIR}/eigen2
+    )
+  include_directories (
+    ${EIGEN2_DIR}/include
+    ${EIGEN2_DIR}
+    ${EIGEN2_DIR}/include/eigen2
+    ${EIGEN2_DIR}/
+    eigen2
+    )
+endif (EIGEN2_DIR)
+check_include_file_cxx (Eigen/Core HAVE_EIGEN2)
+if (HAVE_EIGEN2)
+  message ("*** found Eigen2 (required)")
+else (HAVE_EIGEN2)
+  message (FATAL_ERROR "Please install Eigen2, e.g. `sudo apt-get install libeigen2-dev' or from http://eigen.tuxfamily.org/ and pass -DEIGEN2_DIR:path=/path/to/eigen2 to cmake next time you call it.")
+endif (HAVE_EIGEN2)
+
+# detection of Meka / RTAI code
+
 if (M3_DIR)
   list (APPEND CMAKE_REQUIRED_INCLUDES ${M3_DIR}/src ${M3_DIR})
   include_directories (${M3_DIR}/src ${M3_DIR})
