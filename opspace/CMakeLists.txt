@@ -19,3 +19,6 @@ target_link_libraries (hello_world opspace)
 
 add_executable (testTask testTask.cpp)
 target_link_libraries (testTask opspace jspace_test)
+
+add_executable (testTaskFactory testTaskFactory.cpp)
+target_link_libraries (testTaskFactory opspace)
