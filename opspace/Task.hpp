@@ -173,6 +173,8 @@ namespace opspace {
     */
     virtual Status update(Model const & model) = 0;
     
+    std::string const & getName() const { return name_; }
+    
     Vector const & getActual() const   { return actual_; }
     Vector const & getCommand() const  { return command_; }
     Matrix const & getJacobian() const { return jacobian_; }
