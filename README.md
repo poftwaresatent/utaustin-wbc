@@ -64,6 +64,9 @@ for more details:
 
     /path/to/opspace/release/apps/m3_servo -l float -d '2 2 2 2  1 1 1'
 
+If this complains about a missing SAI XML file, add `-f
+/path/to/opspace/robospecs/m3_with_hand.xml` to the command line.
+
 Make sure the robot's safety button is OFF. Back in the
 `m3_torque_shm.py` terminal, hit the `a` key. Hold on to the robot and
 switch the safety button on.
