@@ -12,14 +12,12 @@ Sentis and Roland Philippsen.
 Getting Started
 ---------------
 
-Grab the code like this:
+Grab the code like this (note: we ditched the `git submodule` setup in favor of `git-subtree`):
 
     git clone git://github.com/poftwaresatent/utaustin-wbc.git
     cd utaustin-wbc
-    git submodule init
-    git submodule update
 
-And then build it like so:
+And then build it like so (unless you have a Meka arm, see below):
 
     mkdir build
     cd build
@@ -47,7 +45,9 @@ Meka/RTAI sources:
     cmake .. -DCMAKE_BUILD_TYPE=Release -DM3_DIR=/home/meka/mekabot/m3
     make
 
-Start the Meka/RTAI controller:
+Start the Meka/RTAI controller (you may first need to `su -l` to the
+account under which M3_ROBOT resides due to log file ownership
+issues):
 
     m3rt_server_run
 
