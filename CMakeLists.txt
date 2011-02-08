@@ -112,6 +112,7 @@ endif (${HAVE_M3_SHM_HEADER})
 # NOTE: add new subprojects here!
 
 subdirs (
+  yaml-cpp
   stanford_wbc
   reflexxes_otg
   opspace
