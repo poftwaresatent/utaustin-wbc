@@ -33,11 +33,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "TaskFactory.hpp"
-#include "Task.hpp"
+#include <opspace/TaskFactory.hpp>
+#include <opspace/task_library.hpp>
 #include <fstream>
 #include <stdexcept>
 
+using jspace::pretty_print;
 
 namespace opspace {
   
@@ -53,6 +54,9 @@ namespace opspace {
 
   static Task * createTask(std::string const & type, std::string const & name)
   {
+    if ("opspace::SelectedJointPostureTask" == type) {
+      return new opspace::SelectedJointPostureTask(name);
+    }
     return 0;
   }
   
@@ -97,77 +101,110 @@ namespace opspace {
 				     + type + "', `" + name + "') failed");
 	  }
 	  if (dbg_) {
-	    *dbg_ << "created task:  type = " << type << "  name = " << name << "\n"
+	    *dbg_ << "created task `" << name << "' of type " << type << "\n"
 		  << "  parsing parameters:\n";
 	  }
 	  for (YAML::Iterator it(node.begin()); it != node.end(); ++it) {
 	    std::string key;
 	    it.first() >> key;
+	    if (("type" == key) || ("name" == key)) {
+	      continue;
+	    }
+	    YAML::Node const & value(it.second());
+	    
+	    if (dbg_) {
+	      char const * dbg_type(0);
+	      switch (value.GetType()) {
+	      case YAML::CT_NONE:     dbg_type = "NONE"; break;
+	      case YAML::CT_SCALAR:   dbg_type = "SCALAR"; break;
+	      case YAML::CT_SEQUENCE: dbg_type = "SEQUENCE"; break;
+	      case YAML::CT_MAP:      dbg_type = "MAP"; break;
+	      default: dbg_type = "unknown"; break;
+	      }
+	      *dbg_ << "  trying `" << key << "' with YAML type " << dbg_type << "\n";
+	    }
+	    
 	    Parameter * param(task->lookupParameter(key));
 	    if (param) {
-	      switch (param->type_) {
-		
-	      case TASK_PARAM_TYPE_INTEGER:
-		if (YAML::CT_SCALAR != node.GetType()) {
+	      
+	      if (TASK_PARAM_TYPE_INTEGER == param->type_) {
+		if (dbg_) {
+		  *dbg_ << "  found integer `" << key << "'\n";
+		}
+		if (YAML::CT_SCALAR != value.GetType()) {
 		  throw std::runtime_error("opspace::TaskFactory::parseStream(): parameter `" + key
 					   + "' of task '" + name + "` should be scalar (integer)");
 		}
-		{
-		  int value;
-		  it.second() >> value;
-		  st = param->set(value);
-		  if ( ! st) {
-		    throw std::runtime_error("opspace::TaskFactory::parseStream(): setting parameter `"
-					     + key + "' of task '" + name + "` failed: " + st.errstr);
-		  }
+		int integer;
+		value >> integer;
+		st = param->set(integer);
+		if ( ! st) {
+		  throw std::runtime_error("opspace::TaskFactory::parseStream(): setting parameter `"
+					   + key + "' of task '" + name + "` failed: " + st.errstr);
 		}
-		break;
-		
-	      case TASK_PARAM_TYPE_REAL:
-		if (YAML::CT_SCALAR != node.GetType()) {
+	      }
+	      
+	      else if (TASK_PARAM_TYPE_REAL == param->type_) {
+		if (YAML::CT_SCALAR != value.GetType()) {
 		  throw std::runtime_error("opspace::TaskFactory::parseStream(): parameter `" + key
 					   + "' of task '" + name + "` should be scalar (real)");
 		}
-		{
-		  double value;
-		  it.second() >> value;
-		  st = param->set(value);
-		  if ( ! st) {
-		    throw std::runtime_error("opspace::TaskFactory::parseStream(): setting parameter `"
-					     + key + "' of task '" + name + "` failed: " + st.errstr);
-		  }
+		double real;
+		if (dbg_) {
+		  std::string dbg_real;
+		  value >> dbg_real;
+		  *dbg_ << "  attempting to parse real value from `" << dbg_real
+			<< "' for parameter `" << key << "'\n";
 		}
-		break;
+		value >> real;
+		if (dbg_) {
+		  *dbg_ << "  setting value " << real << "\n";
+		}
+		st = param->set(real);
+		if ( ! st) {
+		  throw std::runtime_error("opspace::TaskFactory::parseStream(): setting parameter `"
+					   + key + "' of task '" + name + "` failed: " + st.errstr);
+		}
+	      }
 		
-	      case TASK_PARAM_TYPE_VECTOR:
-		if (YAML::CT_SEQUENCE != node.GetType()) {
+	      else if (TASK_PARAM_TYPE_VECTOR == param->type_) {
+		if (dbg_) {
+		  *dbg_ << "  found vector `" << key << "'\n";
+		}
+		if (YAML::CT_SEQUENCE != value.GetType()) {
 		  throw std::runtime_error("opspace::TaskFactory::parseStream(): parameter `" + key
 					   + "' of task '" + name + "` should be sequence (vector)");
 		}
-		{
-		  Vector value;
-		  it.second() >> value;
-		  st = param->set(value);
-		  if ( ! st) {
-		    throw std::runtime_error("opspace::TaskFactory::parseStream(): setting parameter `"
-					     + key + "' of task '" + name + "` failed: " + st.errstr);
-		  }
+		Vector vector;
+		value >> vector;
+		if (dbg_) {
+		  pretty_print(vector, *dbg_, "  setting vector", "    ");
 		}
-		break;
-		
-	      case TASK_PARAM_TYPE_MATRIX:
-		throw std::runtime_error("opspace::TaskFactory::parseStream(): setting parameter `"
-                                           + key + "' of task '" + name
-					 + "` requires MATRIX type which is not (yet) supported");
-		break;
-		
-	      case TASK_PARAM_TYPE_VOID:
-	      default:
-		throw std::runtime_error("opspace::TaskFactory::parseStream(): setting parameter `"
-                                           + key + "' of task '" + name
-					 + "` invalid or VOID type cannot be set");
-		
+		st = param->set(vector);
+		if ( ! st) {
+		  throw std::runtime_error("opspace::TaskFactory::parseStream(): setting parameter `"
+					   + key + "' of task '" + name + "` failed: " + st.errstr);
+		}
 	      }
+	      
+	      else if (TASK_PARAM_TYPE_MATRIX == param->type_) {
+		if (dbg_) {
+		  *dbg_ << "  found matrix `" << key << "'\n";
+		}
+		throw std::runtime_error("opspace::TaskFactory::parseStream(): setting parameter `"
+					 + key + "' of task '" + name
+					 + "` requires MATRIX type which is not (yet) supported");
+	      }
+	      
+	      else {
+		if (dbg_) {
+		  *dbg_ << "  found void `" << key << "'\n";
+		}
+		throw std::runtime_error("opspace::TaskFactory::parseStream(): setting parameter `"
+					 + key + "' of task '" + name
+					 + "` invalid or VOID type cannot be set");
+	      }
+	      
 	      if (dbg_) {
 		param->dump(*dbg_, "  ");
 	      }
@@ -178,15 +215,21 @@ namespace opspace {
 	    
 	  }
 	}
-
+	
       }
     }
     catch (YAML::Exception const & ee) {
+      if (dbg_) {
+	*dbg_ << "YAML::Exception: " << ee.what() << "\n";
+      }
       delete task;
       st.ok = false;
       st.errstr = ee.what();
     }
     catch (std::runtime_error const & ee) {
+      if (dbg_) {
+	*dbg_ << "std::runtime_error: " << ee.what() << "\n";
+      }
       delete task;
       st.ok = false;
       st.errstr = ee.what();

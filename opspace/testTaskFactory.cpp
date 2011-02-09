@@ -40,18 +40,31 @@ using namespace jspace;
 using namespace opspace;
 using namespace std;
 
+static char * const yaml_string =
+  "- type: opspace::SelectedJointPostureTask\n"
+  "  name: odd\n"
+  "  selection: [  1.0,  0.0,  1.0,  0.0,  1.0,  0.0 ]\n"
+  "  kp: 100.0\n"
+  "  kd:  20.0\n"
+  "- type: opspace::SelectedJointPostureTask\n"
+  "  name: even\n"
+  "  selection: [  0.0,  1.0,  0.0,  1.0,  0.0,  1.0 ]\n"
+  "  kp: 100.0\n"
+  "  kd:  20.0\n";
+  
 int main(int argc, char ** argv)
 {
-  string fname;
+  Status st;  
+  TaskFactory tfac(&cout);
+  
   if (argc > 1) {
-    fname = argv[1];
+    cout << "parsing file `" << argv[1] << "'\n";
+    tfac.parseFile(argv[1]);
   }
   else {
-    fname = "tasks.yaml";
+    cout << "parsing yaml_string:\n" << yaml_string;
+    tfac.parseString(yaml_string);
   }
-  
-  TaskFactory tfac(&cout);
-  Status st(tfac.parseFile(fname));
   if ( ! st) {
     cout << "oops: " << st.errstr << "\n";
   }
