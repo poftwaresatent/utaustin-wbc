@@ -33,7 +33,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <opspace/Task.hpp>
+#include <opspace/task_library.hpp>
 #include <opspace/opspace.hpp>
 #include <jspace/test/model_library.hpp>
 #include <err.h>
@@ -42,87 +42,6 @@ using namespace jspace;
 using namespace opspace;
 using namespace std;
 
-namespace {
-  
-  class SelectedJointPostureTask : public Task {
-  public:
-    explicit SelectedJointPostureTask(std::string const & name)
-      : Task(name),
-	kp_(100.0),
-	kd_(20.0),
-	initialized_(false)
-    {
-      declareParameter("selection", &selection_);
-      declareParameter("kp", &kp_);
-      declareParameter("kd", &kd_);
-    }
-    
-    virtual Status init(Model const & model) {
-      for (size_t ii(0); ii < selection_.rows(); ++ii) {
-	if (selection_[ii] > 0.5) {
-	  active_joints_.push_back(ii);
-	}
-      }
-      if (active_joints_.empty()) {
-	return Status(false, "no active joints");
-      }
-      actual_ = Vector::Zero(active_joints_.size());
-      command_ = Vector::Zero(active_joints_.size());
-      jacobian_ = Matrix::Zero(active_joints_.size(), model.getState().position_.rows());
-      for (size_t ii(0); ii < active_joints_.size(); ++ii) {
-	actual_[ii] = model.getState().position_[active_joints_[ii]];
-	jacobian_.coeffRef(ii, active_joints_[ii]) = 1.0;
-      }
-      initialized_ = true;
-      Status ok;
-      return ok;
-    }
-    
-    virtual Status update(Model const & model) { 
-      Status st;
-      if ( ! initialized_) {
-	st.ok = false;
-	st.errstr = "not initialized";
-	return st;
-      }
-      Vector vel(actual_.rows());
-      for (size_t ii(0); ii < active_joints_.size(); ++ii) {
-	actual_[ii] = model.getState().position_[active_joints_[ii]];
-	vel[ii] = model.getState().velocity_[active_joints_[ii]];
-      }
-      command_ = -kp_ * actual_ - kd_ * vel;
-      return st;
-    }
-    
-    virtual Status check(double const * param, double value) const
-    {
-      Status st;
-      if (((&kp_ == param) && (value < 0)) || ((&kd_ == param) && (value < 0))) {
-	st.ok = false;
-	st.errstr = "gains must be >= 0";
-      }
-      return st;
-    }
-    
-    virtual Status check(Vector const * param, Vector const & value) const
-    {
-      Status st;
-      if ((&selection_ == param) && (value.rows() == 0)) {
-	st.ok = false;
-	st.errstr = "selection must not be empty";
-      }
-      return st;
-    }
-    
-  protected:
-    Vector selection_;
-    double kp_;
-    double kd_;
-    bool initialized_;
-    std::vector<size_t> active_joints_;
-  };
-  
-}
 
 int main(int argc, char ** argv)
 {
