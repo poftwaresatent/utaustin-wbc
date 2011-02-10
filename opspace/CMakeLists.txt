@@ -9,6 +9,7 @@ include_directories (
 add_library (opspace SHARED
   opspace.cpp
   Task.cpp
+  Controller.cpp
   TaskFactory.cpp
   controller_library.cpp
   task_library.cpp

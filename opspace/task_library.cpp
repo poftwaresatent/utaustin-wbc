@@ -53,7 +53,12 @@ namespace opspace {
   
   Status SelectedJointPostureTask::
   init(Model const & model) {
+    size_t const ndof(model.getNDOF());
+    active_joints_.clear();	// in case we get called multiple times
     for (size_t ii(0); ii < selection_.rows(); ++ii) {
+      if (ii >= ndof) {
+	break;
+      }
       if (selection_[ii] > 0.5) {
 	active_joints_.push_back(ii);
       }
@@ -61,10 +66,11 @@ namespace opspace {
     if (active_joints_.empty()) {
       return Status(false, "no active joints");
     }
-    actual_ = Vector::Zero(active_joints_.size());
-    command_ = Vector::Zero(active_joints_.size());
-    jacobian_ = Matrix::Zero(active_joints_.size(), model.getState().position_.rows());
-    for (size_t ii(0); ii < active_joints_.size(); ++ii) {
+    size_t const ndim(active_joints_.size());
+    actual_ = Vector::Zero(ndim);
+    command_ = Vector::Zero(ndim);
+    jacobian_ = Matrix::Zero(ndim, ndof);
+    for (size_t ii(0); ii < ndim; ++ii) {
       actual_[ii] = model.getState().position_[active_joints_[ii]];
       jacobian_.coeffRef(ii, active_joints_[ii]) = 1.0;
     }

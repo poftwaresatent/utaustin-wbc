@@ -1,7 +1,7 @@
 /*
  * Whole-Body Control for Human-Centered Robotics http://www.me.utexas.edu/~hcrl/
  *
- * Copyright (c) 2010 University of Texas at Austin. All rights reserved.
+ * Copyright (c) 2011 University of Texas at Austin. All rights reserved.
  *
  * Authors: Roland Philippsen and Luis Sentis
  *
@@ -33,19 +33,45 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <jspace/wrap_eigen.hpp>
+#include <opspace/Task.hpp>
 
 namespace opspace {
   
-  using jspace::Matrix;
-  using jspace::Vector;
   
-  /**
-     This pseudo-inverse is based on SVD, followed by threshlding on
-     the singular values.
-  */
-  void pseudoInverse(Matrix const & matrix,
-		     double sigmaThreshold,
-		     Matrix & invMatrix);
+  class Controller
+  {
+  public:
+    struct task_info_s {
+      task_info_s(Task * tt, bool co, size_t ii)
+	: task(tt), controller_owned(co), index(ii) {}
+      
+      Task * task;
+      bool controller_owned;
+      size_t index;
+      Matrix lambda;
+      Matrix jbar;
+      Matrix nullspace;
+      Vector tau_full;
+      Vector tau_projected;
+    };
+    
+    typedef std::vector<task_info_s *> task_table_t;
+    
+    Controller();
+    virtual ~Controller();
+    
+    /** \note Transfers ownership of the task object if you set
+	controller_owned to true. Controller-owned tasks get deleted
+	in the Controller destructor. */
+    task_info_s const * appendTask(Task * task, bool controller_owned);
+    task_table_t const & getTaskTable() const { return task_table_; };
+    
+    Status init(Model const & model);
+    Status computeCommand(Model const & model, Vector & gamma);
+    
+  protected:
+    task_table_t task_table_;
+    bool initialized_;
+  };
   
 }

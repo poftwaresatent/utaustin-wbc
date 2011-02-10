@@ -34,11 +34,14 @@
  */
 
 #include <opspace/task_library.hpp>
-#include <opspace/opspace.hpp>
+//#include <opspace/opspace.hpp>
+#include <opspace/Controller.hpp>
 #include <jspace/test/model_library.hpp>
 #include <err.h>
 
-using namespace jspace;
+using jspace::Model;
+using jspace::State;
+using jspace::pretty_print;
 using namespace opspace;
 using namespace std;
 
@@ -49,7 +52,7 @@ int main(int argc, char ** argv)
   
   try {
     warnx("creating Puma model");
-    puma = test::create_puma_model();
+    puma = jspace::test::create_puma_model();
     size_t const ndof(puma->getNDOF());
     State state(ndof, ndof, 0);
     for (size_t ii(0); ii < ndof; ++ii) {
@@ -118,30 +121,44 @@ int main(int argc, char ** argv)
     even.update(*puma);
     even.dump(cout, "even task after update", "  ");
     
-    warnx("creating TaskAccumulator");
-    Matrix invA;
-    if ( ! puma->getInverseMassInertia(invA)) {
-      throw runtime_error("failed to get inv mass inertia");
+    warnx("creating and initializing ctrl");
+    Controller ctrl;
+    ctrl.appendTask(&odd, false);
+    ctrl.appendTask(&even, false);
+    st = ctrl.init(*puma);
+    if ( ! st) {
+      throw runtime_error("ctrl init() failed: " + st.errstr);
     }
-    TaskAccumulator tacc(invA);
-    tacc.addTask(odd.getCommand(), odd.getJacobian());
-    tacc.addTask(even.getCommand(), even.getJacobian());
+    
+    warnx("computing command");
+    Vector gamma;
+    st = ctrl.computeCommand(*puma, gamma);
+    if ( ! st) {
+      throw runtime_error("ctrl computeCommand() failed: " + st.errstr);
+    }
     
     cout << "task matrices:\n";
-    for (size_t ii(0); ii < tacc.getNLevels(); ++ii) {
-      std::ostringstream os;
-      os << ii;
-      pretty_print(*tacc.getLambda(ii), cout, "  lambda of level " + os.str(), "    ");
-      pretty_print(*tacc.getJstar(ii), cout, "  jstar of level " + os.str(), "    ");
-      pretty_print(*tacc.getNullspace(ii), cout, "  nullspace of level " + os.str(), "    ");
+    {
+      Controller::task_table_t const & task_table(ctrl.getTaskTable());
+      for (size_t ii(0); ii < task_table.size(); ++ii) {
+	cout << "  level " << ii << ": task `" << task_table[ii]->task->getName() << "'\n";
+	pretty_print(task_table[ii]->lambda, cout, "    lambda", "      ");
+	pretty_print(task_table[ii]->jbar, cout, "    jbar", "      ");
+	pretty_print(task_table[ii]->nullspace, cout, "    nullspace", "      ");
+	pretty_print(task_table[ii]->tau_full, cout, "    tau_full", "      ");
+	pretty_print(task_table[ii]->tau_projected, cout, "    tau_projected", "      ");
+      }
     }
-    pretty_print(tacc.getFinalCommand(), cout, "final command", "  ");
+    pretty_print(gamma, cout, "final command", "  ");
     
     warnx("comparing against full joint posture task");
     SelectedJointPostureTask all("all");
     selection = all.lookupParameter("selection", TASK_PARAM_TYPE_VECTOR);
-    selection->set(static_cast<Vector const &>(Vector::Ones(ndof)));
+    sel = Vector::Ones(ndof);
+    selection->set(sel);
+    all.dump(cout, "all task before init", "  ");
     all.init(*puma);
+    all.dump(cout, "all task after init", "  ");
     all.update(*puma);
     all.dump(cout, "all task after update", "  ");
     
@@ -150,25 +167,46 @@ int main(int argc, char ** argv)
     if ( ! puma->getMassInertia(aa)) {
       throw runtime_error("failed to get mass inertia");
     }
+    Vector gg;
+    if ( ! puma->getGravity(gg)) {
+      throw runtime_error("failed to get gravity");
+    }
     Vector tau_check_one;
-    tau_check_one = aa * all.getCommand();
+    tau_check_one = aa * all.getCommand() + gg;
     pretty_print(tau_check_one, cout, "verification command one", "  ");
 
-    warnx("computing second verification torque");
-    TaskAccumulator tacc_two(invA);
-    tacc_two.addTask(all.getCommand(), all.getJacobian());
-    pretty_print(*tacc_two.getLambda(0), cout, "  lambda of second check", "    ");
-    pretty_print(*tacc_two.getJstar(0), cout, "  jstar of second check", "    ");
-    pretty_print(*tacc_two.getNullspace(0), cout, "  nullspace of second check", "    ");
-    pretty_print(tacc_two.getFinalCommand(), cout, "torque check number two", "  ");
+    warnx("creating and initializing verification controller");
+    Controller ctrl_two;
+    ctrl_two.appendTask(&all, false);
+    st = ctrl_two.init(*puma);
+    if ( ! st) {
+      throw runtime_error("ctrl_two init() failed: " + st.errstr);
+    }
     
-    Vector delta_one;
-    delta_one = tau_check_one - tacc.getFinalCommand();
-    pretty_print(delta_one, cout, "delta one", "  ");
-
-    Vector delta_two;
-    delta_two = tacc_two.getFinalCommand() - tacc.getFinalCommand();
-    pretty_print(delta_two, cout, "delta two", "  ");
+    warnx("computing second verification torque");
+    Vector gamma_two;
+    st = ctrl_two.computeCommand(*puma, gamma_two);
+    if ( ! st) {
+      throw runtime_error("ctrl_two computeCommand() failed: " + st.errstr);
+    }
+    {
+      Controller::task_table_t const & task_table(ctrl_two.getTaskTable());
+      cout << "verification task matrices:\n";
+      for (size_t ii(0); ii < task_table.size(); ++ii) {
+	cout << "  level " << ii << ": task `" << task_table[ii]->task->getName() << "'\n";
+	pretty_print(task_table[ii]->lambda, cout, "    lambda", "      ");
+	pretty_print(task_table[ii]->jbar, cout, "    jbar", "      ");
+	pretty_print(task_table[ii]->nullspace, cout, "    nullspace", "      ");
+	pretty_print(task_table[ii]->tau_full, cout, "    tau_full", "      ");
+	pretty_print(task_table[ii]->tau_projected, cout, "    tau_projected", "      ");
+      }
+      pretty_print(gamma_two, cout, "final command", "  ");
+    }
+    
+    cout << "final comparisons:\n";
+    pretty_print(gamma, cout, "  command of two disjoint tasks", "    ");
+    pretty_print(gamma_two, cout, "  command of one full-rank task", "    ");
+    pretty_print(tau_check_one, cout, "  command of \"manual\" dynamics compensation", "    ");
   }
   
   catch (runtime_error const & ee) {
