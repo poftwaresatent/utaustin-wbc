@@ -120,5 +120,18 @@ namespace opspace {
     }
     return st;
   }
+  
+  
+  TrajectoryTask::
+  TrajectoryTask(std::string const & name)
+    : Task(name)
+  {
+    declareParameter("dt_seconds", &dt_seconds_);
+    declareParameter("goal", &goal_);
+    declareParameter("kp", &kp_);
+    declareParameter("kd", &kd_);
+    declareParameter("maxvel", &maxvel_);
+    declareParameter("maxacc", &maxacc_);
+  }
 
 }

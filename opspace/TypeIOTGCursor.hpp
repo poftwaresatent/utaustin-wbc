@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2011 University of Texas at Austin. All rights reserved.
  *
- * Authors: Roland Philippsen and Luis Sentis
+ * Author: Roland Philippsen
  *
  * BSD license:
  * Redistribution and use in source and binary forms, with or without
@@ -33,48 +33,43 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef OPSPACE_TASK_LIBRARY_HPP
-#define OPSPACE_TASK_LIBRARY_HPP
+#ifndef OPSPACE_TYPE_I_OTG_CURSOR_HPP
+#define OPSPACE_TYPE_I_OTG_CURSOR_HPP
 
-#include <opspace/Task.hpp>
+#include <jspace/wrap_eigen.hpp>
+#include <reflexxes_otg/TypeIOTG.h>
 
 namespace opspace {
-
-  class SelectedJointPostureTask
-    : public Task
-  {
-  public:
-    explicit SelectedJointPostureTask(std::string const & name);
-    
-    virtual Status init(Model const & model);
-    virtual Status update(Model const & model);
-    virtual Status check(double const * param, double value) const;
-    virtual Status check(Vector const * param, Vector const & value) const;
-    
-  protected:
-    Vector selection_;
-    double kp_;
-    double kd_;
-    bool initialized_;
-    std::vector<size_t> active_joints_;
-  };
+  
+  using jspace::Vector;
   
   
-  class TrajectoryTask
-    : public Task
+  class TypeIOTGCursor
   {
   public:
-    TrajectoryTask(std::string const & name);
+    TypeIOTGCursor(size_t ndof,
+		   double dt_seconds);
+    
+    int next(Vector const & maxvel,
+	     Vector const & maxacc,
+	     Vector const & goal);
+    
+    inline Vector & position()             { return pos_clean_; }
+    inline Vector const & position() const { return pos_clean_; }
+    inline Vector & velocity()             { return vel_clean_; }
+    inline Vector const & velocity() const { return vel_clean_; }
     
   protected:
-    double dt_seconds_;
-    Vector goal_;
-    Vector kp_;
-    Vector kd_;
-    Vector maxvel_;
-    Vector maxacc_;
+    typedef Eigen::Matrix<bool, Eigen::Dynamic, 1> boolvec_t;
+    
+    TypeIOTG otg_;
+    boolvec_t selection_;
+    Vector pos_clean_;
+    Vector vel_clean_;
+    Vector pos_dirty_;
+    Vector vel_dirty_;
   };
   
 }
 
-#endif // OPSPACE_TASK_LIBRARY_HPP
+#endif // OPSPACE_TYPE_I_OTG_CURSOR_HPP

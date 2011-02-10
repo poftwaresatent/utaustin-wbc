@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2011 University of Texas at Austin. All rights reserved.
  *
- * Authors: Roland Philippsen and Luis Sentis
+ * Author: Roland Philippsen
  *
  * BSD license:
  * Redistribution and use in source and binary forms, with or without
@@ -33,48 +33,44 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef OPSPACE_TASK_LIBRARY_HPP
-#define OPSPACE_TASK_LIBRARY_HPP
-
-#include <opspace/Task.hpp>
+#include <opspace/TypeIOTGCursor.hpp>
 
 namespace opspace {
-
-  class SelectedJointPostureTask
-    : public Task
-  {
-  public:
-    explicit SelectedJointPostureTask(std::string const & name);
-    
-    virtual Status init(Model const & model);
-    virtual Status update(Model const & model);
-    virtual Status check(double const * param, double value) const;
-    virtual Status check(Vector const * param, Vector const & value) const;
-    
-  protected:
-    Vector selection_;
-    double kp_;
-    double kd_;
-    bool initialized_;
-    std::vector<size_t> active_joints_;
-  };
   
   
-  class TrajectoryTask
-    : public Task
+  TypeIOTGCursor::
+  TypeIOTGCursor(size_t ndof, double dt_seconds)
+    : otg_(ndof, dt_seconds)
   {
-  public:
-    TrajectoryTask(std::string const & name);
-    
-  protected:
-    double dt_seconds_;
-    Vector goal_;
-    Vector kp_;
-    Vector kd_;
-    Vector maxvel_;
-    Vector maxacc_;
-  };
+    pos_clean_ = Vector::Zero(ndof);
+    vel_clean_ = Vector::Zero(ndof);
+    pos_dirty_ = Vector::Zero(ndof);
+    vel_dirty_ = Vector::Zero(ndof);
+    selection_.resize(ndof);
+    for (size_t ii(0); ii < ndof; ++ii) {
+      selection_[ii] = true;
+    }
+  }
+  
+  
+  int TypeIOTGCursor::
+  next(Vector const & maxvel,
+       Vector const & maxacc,
+       Vector const & goal)
+  {
+    int const result(otg_.GetNextMotionState_Position(pos_clean_.data(),
+						      vel_clean_.data(),
+						      maxvel.data(),
+						      maxacc.data(),
+						      goal.data(),
+						      selection_.data(),
+						      pos_dirty_.data(),
+						      vel_dirty_.data()));
+    if (0 <= result) {
+      pos_clean_ = pos_dirty_;
+      vel_clean_ = vel_dirty_;
+    }
+    return result;
+  }
   
 }
-
-#endif // OPSPACE_TASK_LIBRARY_HPP
