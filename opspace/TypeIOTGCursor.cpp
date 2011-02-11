@@ -40,7 +40,9 @@ namespace opspace {
   
   TypeIOTGCursor::
   TypeIOTGCursor(size_t ndof, double dt_seconds)
-    : otg_(ndof, dt_seconds)
+    : ndof_(ndof),
+      dt_seconds_(dt_seconds),
+      otg_(ndof, dt_seconds)
   {
     pos_clean_ = Vector::Zero(ndof);
     vel_clean_ = Vector::Zero(ndof);

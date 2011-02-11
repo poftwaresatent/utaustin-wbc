@@ -39,7 +39,10 @@
 #include <opspace/Task.hpp>
 
 namespace opspace {
-
+  
+  class TypeIOTGCursor;
+  
+  
   class SelectedJointPostureTask
     : public Task
   {
@@ -63,16 +66,35 @@ namespace opspace {
   class TrajectoryTask
     : public Task
   {
-  public:
-    TrajectoryTask(std::string const & name);
-    
   protected:
+    explicit TrajectoryTask(std::string const & name);
+    
     double dt_seconds_;
     Vector goal_;
     Vector kp_;
     Vector kd_;
     Vector maxvel_;
     Vector maxacc_;
+    bool goal_changed_;		// this needs be be set to true somewhere...
+  };
+  
+  
+  class PositionTask
+    : public TrajectoryTask
+  {
+  public:
+    explicit PositionTask(std::string const & name);
+    virtual ~PositionTask();
+    
+    virtual Status init(Model const & model);
+    virtual Status update(Model const & model);
+    
+  protected:
+    TypeIOTGCursor * cursor_;
+    int end_effector_id_;
+    Vector control_point_;
+    
+    taoDNode const * updateActual(Model const & model);
   };
   
 }

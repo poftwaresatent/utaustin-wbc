@@ -47,6 +47,9 @@ namespace opspace {
   class TypeIOTGCursor
   {
   public:
+    size_t const ndof_;
+    double const dt_seconds_;
+    
     TypeIOTGCursor(size_t ndof,
 		   double dt_seconds);
     
