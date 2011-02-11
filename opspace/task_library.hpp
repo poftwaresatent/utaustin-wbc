@@ -105,6 +105,17 @@ namespace opspace {
     taoDNode const * updateActual(Model const & model);
   };
   
+  
+  class PostureTask
+    : public TrajectoryTask
+  {
+  public:
+    explicit PostureTask(std::string const & name);
+    
+    virtual Status init(Model const & model);
+    virtual Status update(Model const & model);
+  };
+  
 }
 
 #endif // OPSPACE_TASK_LIBRARY_HPP

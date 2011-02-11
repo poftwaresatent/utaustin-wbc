@@ -333,4 +333,27 @@ namespace opspace {
     return ee_node;
   }
   
+  
+  PostureTask::
+  PostureTask(std::string const & name)
+    : TrajectoryTask(name)
+  {
+  }
+  
+  
+  Status PostureTask::
+  init(Model const & model)
+  {
+    jacobian_ = Matrix::Identity(model.getNDOF(), model.getNDOF());
+    return initTrajectoryTask(model.getState().position_, true);
+  }
+  
+  
+  Status PostureTask::
+  update(Model const & model)
+  {
+    actual_ = model.getState().position_;
+    return computeCommand(actual_, model.getState().velocity_, command_);
+  }
+  
 }
