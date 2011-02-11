@@ -17,10 +17,16 @@ endif (NOT CMAKE_BUILD_TYPE)
 # OS detection
 
 if (WIN32)
+  message ("--- detected Windows")
   add_definitions (-DWIN32)
 else (WIN32)
   if (APPLE)
+    message ("--- detected OSX")
     add_definitions (-DOSX)
+    list (APPEND CMAKE_REQUIRED_INCLUDES
+      /opt/local/include
+      /opt/local/include/eigen2
+      )
     include_directories (
       /opt/local/include
       /opt/local/include/eigen2
@@ -28,11 +34,18 @@ else (WIN32)
     link_directories (/opt/local/lib)
   endif (APPLE)
   if (CMAKE_SYSTEM_NAME MATCHES Linux)
+    message ("--- detected Linux")
     add_definitions (-DLINUX)
+    list (APPEND CMAKE_REQUIRED_INCLUDES /usr/include/eigen2)
     include_directories (/usr/include/eigen2)
   endif (CMAKE_SYSTEM_NAME MATCHES Linux)
   if (CMAKE_SYSTEM_NAME MATCHES OpenBSD)
+    message ("--- detected OpenBSD")
     add_definitions (-DOPENBSD)
+    list (APPEND CMAKE_REQUIRED_INCLUDES
+      /usr/local/include
+      /usr/local/include/eigen2
+      )
     include_directories (
       /usr/local/include
       /usr/local/include/eigen2
@@ -80,8 +93,7 @@ if (EIGEN2_DIR)
     ${EIGEN2_DIR}/include
     ${EIGEN2_DIR}
     ${EIGEN2_DIR}/include/eigen2
-    ${EIGEN2_DIR}/
-    eigen2
+    ${EIGEN2_DIR}/eigen2
     )
 endif (EIGEN2_DIR)
 check_include_file_cxx (Eigen/Core HAVE_EIGEN2)
