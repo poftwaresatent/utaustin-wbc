@@ -50,7 +50,21 @@ static char * const yaml_string =
   "  name: even\n"
   "  selection: [  0.0,  1.0,  0.0,  1.0,  0.0,  1.0 ]\n"
   "  kp: 100.0\n"
-  "  kd:  20.0\n";
+  "  kd:  20.0\n"
+  "- type: opspace::PositionTask\n"
+  "  name: eepos\n"
+  "  dt_seconds: 0.002\n"
+  "  kp: [ 100.0 ]\n"
+  "  kd: [  20.0 ]\n"
+  "  maxvel: [ 0.5 ]\n"
+  "  maxacc: [ 1.5 ]\n"
+  "- type: opspace::PostureTask\n"
+  "  name: posture\n"
+  "  dt_seconds: 0.002\n"
+  "  kp: [ 400.0, 400.0, 400.0, 100.0, 100.0, 100.0, 100.0 ]\n"
+  "  kd: [  40.0,  40.0,  40.0,  20.0,  20.0,  20.0,  20.0 ]\n"
+  "  maxvel: [ 3.1416 ]\n"
+  "  maxacc: [ 6.2832 ]\n";
   
 int main(int argc, char ** argv)
 {

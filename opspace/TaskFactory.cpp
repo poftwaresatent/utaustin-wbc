@@ -57,6 +57,12 @@ namespace opspace {
     if ("opspace::SelectedJointPostureTask" == type) {
       return new opspace::SelectedJointPostureTask(name);
     }
+    if ("opspace::PositionTask" == type) {
+      return new opspace::PositionTask(name);
+    }
+    if ("opspace::PostureTask" == type) {
+      return new opspace::PostureTask(name);
+    }
     return 0;
   }
   
