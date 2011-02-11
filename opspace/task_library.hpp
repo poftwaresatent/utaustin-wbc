@@ -66,16 +66,26 @@ namespace opspace {
   class TrajectoryTask
     : public Task
   {
+  public:
+    virtual ~TrajectoryTask();
+    
+    virtual Status check(double const * param, double value) const;
+    virtual Status check(Vector const * param, Vector const & value) const;
+    
   protected:
     explicit TrajectoryTask(std::string const & name);
     
+    Status initTrajectoryTask(Vector const & initpos, bool allow_scalar_to_vector);
+    Status computeCommand(Vector const & curpos, Vector const & curvel, Vector & command);
+    
+    TypeIOTGCursor * cursor_;
     double dt_seconds_;
     Vector goal_;
+    mutable bool goal_changed_;
     Vector kp_;
     Vector kd_;
     Vector maxvel_;
     Vector maxacc_;
-    bool goal_changed_;		// this needs be be set to true somewhere...
   };
   
   
@@ -84,13 +94,11 @@ namespace opspace {
   {
   public:
     explicit PositionTask(std::string const & name);
-    virtual ~PositionTask();
     
     virtual Status init(Model const & model);
     virtual Status update(Model const & model);
     
   protected:
-    TypeIOTGCursor * cursor_;
     int end_effector_id_;
     Vector control_point_;
     

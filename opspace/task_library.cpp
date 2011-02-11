@@ -126,7 +126,9 @@ namespace opspace {
   TrajectoryTask::
   TrajectoryTask(std::string const & name)
     : Task(name),
-      dt_seconds_(-1)
+      cursor_(0),
+      dt_seconds_(-1),
+      goal_changed_(false)
   {
     declareParameter("dt_seconds", &dt_seconds_);
     declareParameter("goal", &goal_);
@@ -137,55 +139,53 @@ namespace opspace {
   }
   
   
-  PositionTask::
-  PositionTask(std::string const & name)
-    : TrajectoryTask(name),
-      cursor_(0),
-      end_effector_id_(-1),
-      control_point_(Vector::Zero(3))
-  {
-    declareParameter("end_effector_id", &end_effector_id_);
-    declareParameter("control_point", &control_point_);
-  }
-  
-
-  PositionTask::
-  ~PositionTask()
+  TrajectoryTask::
+  ~TrajectoryTask()
   {
     delete cursor_;
   }
   
   
-  Status PositionTask::
-  init(Model const & model)
+  Status TrajectoryTask::
+  initTrajectoryTask(Vector const & initpos, bool allow_scalar_to_vector)
   {
     if (0 > dt_seconds_) {
       return Status(false, "you did not (correctly) set dt_seconds");
     }
-    if (0 > end_effector_id_) {
-      return Status(false, "you did not (correctly) set end_effector_id");
-    }
-    if (3 != control_point_.rows()) {
-      return Status(false, "control_point needs to be three dimensional");
-    }
-    if (0 == maxvel_.rows()) {
-      return Status(false, "you did not (correctly) set maxvel");
-    }
-    if (0 == maxacc_.rows()) {
-      return Status(false, "you did not (correctly) set maxacc");
-    }
-    if (0 == kp_.rows()) {
-      return Status(false, "you did not (correctly) set kp");
-    }
-    if (0 == kd_.rows()) {
-      return Status(false, "you did not (correctly) set kd");
-    }
     
-    if (0 == updateActual(model)) {
-      return Status(false, "updateActual() failed, did you specify a valid end_effector_id?");
+    int const ndim(initpos.rows());
+    if (ndim != maxvel_.rows()) {
+      if ((ndim != 1) && (1 == maxvel_.rows()) && allow_scalar_to_vector) {
+	maxvel_ = maxvel_[0] * Vector::Ones(ndim);
+      }
+      else {
+	return Status(false, "you did not (correctly) set maxvel");
+      }
     }
-    goal_ = actual_;
-    goal_changed_ = true;
+    if (ndim != maxacc_.rows()) {
+      if ((ndim != 1) && (1 == maxacc_.rows()) && allow_scalar_to_vector) {
+	maxacc_ = maxacc_[0] * Vector::Ones(ndim);
+      }
+      else {
+	return Status(false, "you did not (correctly) set maxacc");
+      }
+    }
+    if (ndim != kp_.rows()) {
+      if ((ndim != 1) && (1 == kp_.rows()) && allow_scalar_to_vector) {
+	kp_ = kp_[0] * Vector::Ones(ndim);
+      }
+      else {
+	return Status(false, "you did not (correctly) set kp");
+      }
+    }
+    if (ndim != kd_.rows()) {
+      if ((ndim != 1) && (1 == kd_.rows()) && allow_scalar_to_vector) {
+	kd_ = kd_[0] * Vector::Ones(ndim);
+      }
+      else {
+	return Status(false, "you did not (correctly) set kd");
+      }
+    }
     
     if (cursor_) {
       if (cursor_->dt_seconds_ != dt_seconds_) {
@@ -194,11 +194,106 @@ namespace opspace {
       }
     }
     if ( ! cursor_) {
-      cursor_ = new TypeIOTGCursor(3, dt_seconds_);
+      cursor_ = new TypeIOTGCursor(ndim, dt_seconds_);
     }
+    
+    goal_ = initpos;
+    goal_changed_ = true;
+    
+    return Status();
+  }
+  
+  
+  Status TrajectoryTask::
+  computeCommand(Vector const & curpos, Vector const & curvel, Vector & command)
+  {
+    if ( ! cursor_) {
+      return Status(false, "not initialized");
+    }
+    
+    if (goal_changed_) {
+      cursor_->position() = curpos;
+      cursor_->velocity() = curvel;
+      goal_changed_ = false;
+    }
+    
+    if (0 > cursor_->next(maxvel_, maxacc_, goal_)) {
+      return Status(false, "trajectory generation error");
+    }
+    
+    //
+    // XXXX to do: implement PD velocity saturation at maxvel_ (in
+    // addition to the velocity-limited trajectory)
+    //
+    command_
+      = kp_.cwise() * (actual_ - cursor_->position())
+      + kd_.cwise() * (curvel  - cursor_->velocity());
     
     Status ok;
     return ok;
+  }
+  
+  
+  Status TrajectoryTask::
+  check(double const * param, double value) const
+  {
+    if ((param == &dt_seconds_) && (0 >= value)) {
+      return Status(false, "dt_seconds must be > 0");
+    }
+    return Status();
+  }
+  
+  
+  Status TrajectoryTask::
+  check(Vector const * param, Vector const & value) const
+  {
+    if (cursor_) {
+      if (param == &goal_) {
+	if (cursor_->ndof_ != value.rows()) {
+	  return Status(false, "invalid goal dimension");
+	}
+	goal_changed_ = true;
+      }
+      if ((param == &kp_) || (param == &kd_)
+	  || (param == &maxvel_) || (param == &maxacc_)) {
+	if (cursor_->ndof_ != value.rows()) {
+	  return Status(false, "invalid dimension");
+	}
+	for (size_t ii(0); ii < cursor_->ndof_; ++ii) {
+	  if (0 > value[ii]) {
+	    return Status(false, "bounds and gains must be >= 0");
+	  }
+	}
+      }
+    }
+    return Status();
+  }
+  
+  
+  PositionTask::
+  PositionTask(std::string const & name)
+    : TrajectoryTask(name),
+      end_effector_id_(-1),
+      control_point_(Vector::Zero(3))
+  {
+    declareParameter("end_effector_id", &end_effector_id_);
+    declareParameter("control_point", &control_point_);
+  }
+  
+  
+  Status PositionTask::
+  init(Model const & model)
+  {
+    if (0 > end_effector_id_) {
+      return Status(false, "you did not (correctly) set end_effector_id");
+    }
+    if (3 != control_point_.rows()) {
+      return Status(false, "control_point needs to be three dimensional");
+    }
+    if (0 == updateActual(model)) {
+      return Status(false, "updateActual() failed, did you specify a valid end_effector_id?");
+    }
+    return initTrajectoryTask(actual_, true);
   }
   
   
@@ -209,29 +304,16 @@ namespace opspace {
     if (0 == ee_node) {
       return Status(false, "updateActual() failed, did you specify a valid end_effector_id?");
     }
+    
     Matrix Jfull;
     if ( ! model.computeJacobian(ee_node, actual_[0], actual_[1], actual_[2], Jfull)) {
       return Status(false, "failed to compute Jacobian (unsupported joint type?)");
     }
     jacobian_ = Jfull.block(0, 0, 3, Jfull.cols());
-    Vector curvel(jacobian_ * model.getState().velocity_);
     
-    if (goal_changed_) {
-      cursor_->position() = actual_;
-      cursor_->velocity() = curvel;
-      goal_changed_ = false;
-    }
-    int otg_result(cursor_->next(maxvel_, maxacc_, goal_));
-    if (0 > otg_result) {
-      return Status(false, "trajectory generation error");
-    }
-    
-    command_
-      = kp_.cwise() * (actual_ - cursor_->position())
-      + kd_.cwise() * (curvel  - cursor_->velocity());
-    
-    Status ok;
-    return ok;
+    return computeCommand(actual_,
+			  jacobian_ * model.getState().velocity_,
+			  command_);
   }
   
   
