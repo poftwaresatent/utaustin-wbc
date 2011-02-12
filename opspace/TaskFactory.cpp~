@@ -39,7 +39,6 @@
 #include <yaml-cpp/yaml.h>
 #include <jspace/Status.hpp>
 
-
 namespace opspace {
   
   using jspace::Status;
@@ -50,21 +49,13 @@ namespace opspace {
   {
   public:
     typedef std::vector<Task *> task_table_t;
-
-    explicit TaskFactory(std::ostream * dbg = 0) : dbg_(dbg) {}
     
-    Status parseString(std::string const & yaml_string);
-    Status parseFile(std::string const & yaml_filename);
-    Status parseStream(std::istream & yaml_istream);
+    TaskFactory();
     
+    Status parseYaml(std::string const & filename);
     task_table_t const & getTaskTable() const;
     
-    void dump(std::ostream & os,
-	      std::string const & title,
-	      std::string const & prefix) const;
-    
   protected:
-    std::ostream * dbg_;
     task_table_t task_table_;
   };
   

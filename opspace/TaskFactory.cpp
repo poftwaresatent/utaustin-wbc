@@ -220,6 +220,8 @@ namespace opspace {
 	    }
 	    
 	  }
+	  
+	  task_table_.push_back(task);
 	}
 	
       }
@@ -240,15 +242,30 @@ namespace opspace {
       st.ok = false;
       st.errstr = ee.what();
     }
-      
+    
     return st;
   }
-
+  
   
   TaskFactory::task_table_t const & TaskFactory::
   getTaskTable() const
   {
     return task_table_;
   }
-
+  
+  
+  void TaskFactory::
+  dump(std::ostream & os,
+       std::string const & title,
+       std::string const & prefix) const
+  {
+    if ( ! title.empty()) {
+      os << title << "\n";
+    }
+    for (task_table_t::const_iterator it(task_table_.begin());
+	 it != task_table_.end(); ++it) {
+      (*it)->dump(os, "", prefix + "  ");
+    }
+  }
+  
 }

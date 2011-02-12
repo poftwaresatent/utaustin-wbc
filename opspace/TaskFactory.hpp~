@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2011 University of Texas at Austin. All rights reserved.
  *
- * Authors: Roland Philippsen
+ * Authors: Roland Philippsen and Luis Sentis
  *
  * BSD license:
  * Redistribution and use in source and binary forms, with or without
@@ -37,35 +37,17 @@
 #define OPSPACE_TASK_FACTORY_HPP
 
 #include <yaml-cpp/yaml.h>
-#include <jspace/Status.hpp>
-
 
 namespace opspace {
-  
-  using jspace::Status;
-  
-  class Task;
   
   class TaskFactory
   {
   public:
-    typedef std::vector<Task *> task_table_t;
-
-    explicit TaskFactory(std::ostream * dbg = 0) : dbg_(dbg) {}
-    
-    Status parseString(std::string const & yaml_string);
-    Status parseFile(std::string const & yaml_filename);
-    Status parseStream(std::istream & yaml_istream);
-    
-    task_table_t const & getTaskTable() const;
-    
-    void dump(std::ostream & os,
-	      std::string const & title,
-	      std::string const & prefix) const;
+    explicit TaskFactory(std::string const & yaml_filename);
+    explicit TaskFactory(std::istream & yaml_istream);
     
   protected:
-    std::ostream * dbg_;
-    task_table_t task_table_;
+    
   };
   
 }
