@@ -71,6 +71,7 @@
 using jspace::State;
 using jspace::convert;
 using jspace::Transform;
+using jspace::pretty_print;
 using jspace::test::parse_sai_xml_file;
 using namespace opspace;
 using namespace std;
@@ -114,8 +115,8 @@ static int sys_thread_active = 0;
 static int sys_thread_end=0;
 static int end=0;
 static int hst;
-static M3TorqueShmSdsCommand cmd;
-static M3TorqueShmSdsStatus status;
+static M3TorqueShmSdsCommand shm_cmd;
+static M3TorqueShmSdsStatus shm_status;
 static int sds_status_size;
 static int sds_cmd_size;
 static void endme(int code) { end=code; }
@@ -135,16 +136,16 @@ void SetTorque_mNm(enum M3Chain chain,unsigned int  idx, mReal tq_desired)
   switch(chain)
     {
     case RIGHT_ARM:
-      cmd.right_arm.tq_desired[idx] = tq_desired;
+      shm_cmd.right_arm.tq_desired[idx] = tq_desired;
       return;
     case LEFT_ARM:
-      cmd.left_arm.tq_desired[idx] = tq_desired;
+      shm_cmd.left_arm.tq_desired[idx] = tq_desired;
       return;
     case TORSO:	
-      cmd.torso.tq_desired[idx] = tq_desired;
+      shm_cmd.torso.tq_desired[idx] = tq_desired;
       return;
     case HEAD:	
-      cmd.head.tq_desired[idx] = tq_desired;
+      shm_cmd.head.tq_desired[idx] = tq_desired;
       return;
     }
   return; 
@@ -152,13 +153,13 @@ void SetTorque_mNm(enum M3Chain chain,unsigned int  idx, mReal tq_desired)
 
 void SetTimestamp(int64_t  timestamp)
 {  
-  cmd.timestamp = timestamp;
+  shm_cmd.timestamp = timestamp;
   return; 
 }
 
 int64_t GetTimestamp()
 {  
-  return status.timestamp; 
+  return shm_status.timestamp; 
 }
 
 ////////////////////////// MAIN COMPUTATION METHOD /////////////////////////////
@@ -221,11 +222,15 @@ static void* rt_system_thread(void * arg)
   sys_thread_active=1;
   
   bool first_iteration(true);
+  time_t trigger_goal_change;
+  Vector goal[2];
+  size_t next_goal;
+  
   while(!sys_thread_end)
     {
       start_time = nano2count(rt_get_cpu_time_ns());
       rt_sem_wait(status_sem);
-      memcpy(&status, sds->status, sds_status_size);		
+      memcpy(&shm_status, sds->status, sds_status_size);		
       rt_sem_signal(status_sem);
 
       //////////////////////////////////////////////////
@@ -236,8 +241,8 @@ static void* rt_system_thread(void * arg)
       State state(7, 7, 0);
       
       for (unsigned int ii(0); ii < 7; ++ii) {
-	state.position_[ii] = M_PI * status.right_arm.theta[ii] / 180.0;
-	state.velocity_[ii] = M_PI * status.right_arm.thetadot[ii] / 180.0;
+	state.position_[ii] = M_PI * shm_status.right_arm.theta[ii] / 180.0;
+	state.velocity_[ii] = M_PI * shm_status.right_arm.thetadot[ii] / 180.0;
       }
       
       model->update(state);
@@ -251,6 +256,9 @@ static void* rt_system_thread(void * arg)
 	  ok = false;
 	}
 	if (ok) {
+	  goal[0] = eegoal;
+	  goal[1] = *eegoal_p->getVector();
+	  next_goal = 1;
 	  status = eegoal_p->set(eegoal);
 	  if ( ! status) {
 	    warnx("ERROR: eegoal setting failed (did you specify one?): %s",
@@ -275,7 +283,29 @@ static void* rt_system_thread(void * arg)
 	  break;
 	}
 	
+	struct timeval now;
+	gettimeofday(&now, 0);
+	trigger_goal_change = now.tv_sec + 5;	
+	
 	first_iteration = false;
+      }
+      
+      else {			// not the first iteration
+	struct timeval now;
+	gettimeofday(&now, 0);
+	if (now.tv_sec >= trigger_goal_change) {
+	  trigger_goal_change = now.tv_sec + 5;	
+	  Status const status(eegoal_p->set(goal[next_goal]));
+	  if ( ! status) {
+	    warnx("ERROR: eegoal switch failed: %s",
+		  status.errstr.c_str());
+	    controller_errstr = "eegoal switch: " + status.errstr;
+	    endme(981);
+	    sys_thread_end=1;
+	    break;
+	  }
+	  next_goal = 1 - next_goal;
+	}
       }
       
       Vector tau;
@@ -294,7 +324,7 @@ static void* rt_system_thread(void * arg)
       //////////////////////////////////////////////////
       
       rt_sem_wait(command_sem);
-      memcpy(sds->cmd, &cmd, sds_cmd_size);		
+      memcpy(sds->cmd, &shm_cmd, sds_cmd_size);		
       rt_sem_signal(command_sem);
       
       end_time = nano2count(rt_get_cpu_time_ns());
@@ -568,7 +598,7 @@ int main (int argc, char ** argv)
       
       printf("joint angles: ");
       for (unsigned int ii(0); ii < 7; ++ii) {
-	prettyPrint(status.right_arm.theta[ii]);
+	prettyPrint(shm_status.right_arm.theta[ii]);
       }
       printf("\n");
       
@@ -590,13 +620,13 @@ int main (int argc, char ** argv)
       
       printf("tau desired:  ");
       for (unsigned int ii(0); ii < 7; ++ii) {
-	prettyPrint(1e-3 * cmd.right_arm.tq_desired[ii]);
+	prettyPrint(1e-3 * shm_cmd.right_arm.tq_desired[ii]);
       }
       printf("\n");
       
       printf("tau actual:   ");
       for (unsigned int ii(0); ii < 7; ++ii) {
-	prettyPrint(1e-3 * status.right_arm.torque[ii]);
+	prettyPrint(1e-3 * shm_status.right_arm.torque[ii]);
       }
       printf("\n");
       
@@ -607,6 +637,8 @@ int main (int argc, char ** argv)
 	prettyPrint(eepos.translation()[ii]);
       }
       printf("\n");
+      
+      pretty_print(*eegoal_p->getVector(), cout, "eegoal", "  ");
       
       printf("errstr (may be old): %s\n", controller_errstr.c_str());
     }
