@@ -137,7 +137,8 @@ namespace opspace {
       tinfo->jbar = ainv * jac.transpose() * tinfo->lambda;
       Matrix jtjbt(jac.transpose() * tinfo->jbar.transpose());
       tinfo->tau_full
-	= jac.transpose() * tinfo->lambda * tinfo->task->getCommand() + jtjbt * grav;
+	= jac.transpose() * tinfo->lambda * tinfo->task->getCommand()
+	+ jtjbt * grav;
       if (0 == ii) {
 	tinfo->nullspace
 	  = Matrix::Identity(ndof, ndof); // for this task, waste of ram and cycles...
