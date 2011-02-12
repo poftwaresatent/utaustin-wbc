@@ -2,14 +2,14 @@
   name: eepos
   control_point: [ 0.0, -0.15, 0.0 ]
   dt_seconds: 0.002
-  kp: [  0.0 ]
-  kd: [  0.0 ]
+  kp: [  5.0 ]
+  kd: [  1.0 ]
   maxvel: [ 0.5 ]
   maxacc: [ 1.5 ]
 - type: opspace::PostureTask
   name: posture
   dt_seconds: 0.002
-  kp: [  0.0 ]
-  kd: [  0.0 ]
+  kp: [ 10.0 ]
+  kd: [  1.0 ]
   maxvel: [ 3.1416 ]
   maxacc: [ 6.2832 ]

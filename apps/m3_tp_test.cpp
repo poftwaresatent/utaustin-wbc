@@ -596,7 +596,11 @@ int main (int argc, char ** argv)
     {		
       usleep(1000000);
       
-      printf("joint angles: ");
+      printf("\nposture goal: ");
+      for (unsigned int ii(0); ii < 7; ++ii) {
+	prettyPrint(jgoal_p->getVector()->coeff(ii) * 180.0 / M_PI);
+      }
+      printf("\njoint angles: ");
       for (unsigned int ii(0); ii < 7; ++ii) {
 	prettyPrint(shm_status.right_arm.theta[ii]);
       }
@@ -630,17 +634,21 @@ int main (int argc, char ** argv)
       }
       printf("\n");
       
+      printf("eegoal:              ");
+      for (unsigned int ii(0); ii < 3; ++ii) {
+	prettyPrint(eegoal_p->getVector()->coeff(ii));
+      }
+      printf("\n");
+      
       Transform eepos;
       model->getGlobalFrame(right_hand, eepos);
-      printf("right-hand position:   ");
+      printf("right-hand position: ");
       for (unsigned int ii(0); ii < 3; ++ii) {
 	prettyPrint(eepos.translation()[ii]);
       }
       printf("\n");
       
-      pretty_print(*eegoal_p->getVector(), cout, "eegoal", "  ");
-      
-      printf("errstr (may be old): %s\n", controller_errstr.c_str());
+      printf("errstr: %s\n", controller_errstr.c_str());
     }
   
   //////////////////////////////////////////////////
