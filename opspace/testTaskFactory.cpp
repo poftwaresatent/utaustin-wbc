@@ -73,11 +73,11 @@ int main(int argc, char ** argv)
   
   if (argc > 1) {
     cout << "parsing file `" << argv[1] << "'\n";
-    tfac.parseFile(argv[1]);
+    st = tfac.parseFile(argv[1]);
   }
   else {
     cout << "parsing yaml_string:\n" << yaml_string;
-    tfac.parseString(yaml_string);
+    st = tfac.parseString(yaml_string);
   }
   if ( ! st) {
     cout << "oops: " << st.errstr << "\n";
