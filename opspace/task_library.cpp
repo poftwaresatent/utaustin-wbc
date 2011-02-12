@@ -36,6 +36,8 @@
 #include "task_library.hpp"
 #include "TypeIOTGCursor.hpp"
 
+using jspace::pretty_print;
+
 namespace opspace {
   
   
@@ -205,7 +207,9 @@ namespace opspace {
   
   
   Status TrajectoryTask::
-  computeCommand(Vector const & curpos, Vector const & curvel, Vector & command)
+  computeCommand(Vector const & curpos,
+		 Vector const & curvel,
+		 Vector & command)
   {
     if ( ! cursor_) {
       return Status(false, "not initialized");
@@ -226,8 +230,8 @@ namespace opspace {
     // addition to the velocity-limited trajectory)
     //
     command_
-      = kp_.cwise() * (actual_ - cursor_->position())
-      + kd_.cwise() * (curvel  - cursor_->velocity());
+      = kp_.cwise() * (curpos - cursor_->position())
+      + kd_.cwise() * (curvel - cursor_->velocity());
     
     Status ok;
     return ok;
@@ -267,6 +271,24 @@ namespace opspace {
       }
     }
     return Status();
+  }
+  
+  
+  void TrajectoryTask::
+  dbg(std::ostream & os,
+      std::string const & title,
+      std::string const & prefix) const
+  {
+    if ( ! title.empty()) {
+      os << title << "\n";
+    }
+    os << prefix << "trajectory task: `" << name_ << "'\n";
+    if ( ! cursor_) {
+      os << prefix << "  NOT INITIALIZED\n";
+    }
+    pretty_print(actual_, os, "actual", prefix + "  ");
+    pretty_print(cursor_->position(), os, "carrot", prefix + "  ");
+    pretty_print(goal_, os, "goal", prefix + "  ");
   }
   
   

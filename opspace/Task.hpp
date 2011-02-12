@@ -195,6 +195,8 @@ namespace opspace {
     
     void dump(std::ostream & os, std::string const & title, std::string const & prefix) const;
     
+    virtual void dbg(std::ostream & os, std::string const & title, std::string const & prefix) const {}
+    
   protected:
     typedef std::map<std::string, Parameter *> parameter_lookup_t;
     

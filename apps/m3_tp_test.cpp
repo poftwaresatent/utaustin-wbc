@@ -91,6 +91,7 @@ using namespace std;
 static string model_filename("/home/meka/mekabot/wbc-utexas/robospecs/m3_with_hand.xml");
 static string tasks_filename("");
 static Vector eegoal, jgoal;
+static int goal_switch_delay(-1);
 static char const * tasks_default =
   "- type: opspace::PositionTask\n"
   "  name: eepos\n"
@@ -256,9 +257,13 @@ static void* rt_system_thread(void * arg)
 	  ok = false;
 	}
 	if (ok) {
-	  goal[0] = eegoal;
-	  goal[1] = *eegoal_p->getVector();
-	  next_goal = 1;
+	  
+	  if (0 < goal_switch_delay) {
+	    goal[0] = eegoal;
+	    goal[1] = *eegoal_p->getVector();
+	    next_goal = 1;
+	  }
+	  
 	  status = eegoal_p->set(eegoal);
 	  if ( ! status) {
 	    warnx("ERROR: eegoal setting failed (did you specify one?): %s",
@@ -283,18 +288,20 @@ static void* rt_system_thread(void * arg)
 	  break;
 	}
 	
-	struct timeval now;
-	gettimeofday(&now, 0);
-	trigger_goal_change = now.tv_sec + 5;	
+	if (0 < goal_switch_delay) {
+	  struct timeval now;
+	  gettimeofday(&now, 0);
+	  trigger_goal_change = now.tv_sec + goal_switch_delay;
+	}
 	
 	first_iteration = false;
       }
       
-      else {			// not the first iteration
+      else if (0 < goal_switch_delay) {
 	struct timeval now;
 	gettimeofday(&now, 0);
 	if (now.tv_sec >= trigger_goal_change) {
-	  trigger_goal_change = now.tv_sec + 5;	
+	  trigger_goal_change = now.tv_sec + goal_switch_delay;	
 	  Status const status(eegoal_p->set(goal[next_goal]));
 	  if ( ! status) {
 	    warnx("ERROR: eegoal switch failed: %s",
@@ -371,12 +378,13 @@ static void prettyPrint(double value)
 
 static void usage(ostream & os)
 {
-  os << "options:\n"
+  os << "options: (-e and -j are required)\n"
      << "   -h             help (this message)\n"
      << "   -f filename    specify robot model (SAI XML file)\n"
      << "   -t filename    specify task definition (YAML file)\n"
      << "   -e eegoal      end-effector goal [m] (space-separated)\n"
-     << "   -j jgoal       posture goal [deg] (space-separated)\n";
+     << "   -j jgoal       posture goal [deg] (space-separated)\n"
+     << "   -d delay       delay [s] between switching goals\n";
 }
 
 
@@ -460,7 +468,7 @@ void parse_options(int argc, char ** argv)
 	    is >> bar;
 	    if (is) {
 	      arg_jgoal.push_back(M_PI * bar / 180.0);
-	      fprintf(stderr, " %gdeg=%g ", bar, M_PI * bar / 180.0);
+	      fprintf(stderr, "  %g deg = %g rad", bar, M_PI * bar / 180.0);
 	    }
 	    fprintf(stderr, "\n");
 	  }
@@ -474,6 +482,28 @@ void parse_options(int argc, char ** argv)
 	    errx(EXIT_FAILURE, "jgoal must have seven dimensions");
 	  }
 	  convert(arg_jgoal, jgoal);
+	}
+	break;
+	
+      case 'd':
+	++ii;
+	if (ii >= argc)
+	  errx(EXIT_FAILURE, "-d requires parameters");
+	{
+	  istringstream is(argv[ii]);
+	  is >> goal_switch_delay;
+	  if ( ! is) {
+	    cerr << argv[0]
+		 << ": error reading goal switch delay from `"
+		 << argv[ii] << "'\n";
+	    usage(cerr);
+	    exit(EXIT_FAILURE);
+	  }
+	  if (0 >= goal_switch_delay) {
+	    errx(EXIT_FAILURE,
+		 "invalid negative goal switch delay %d (omit -d to disable goal switching)",
+		 goal_switch_delay);
+	  }
 	}
 	break;
 	
@@ -594,7 +624,7 @@ int main (int argc, char ** argv)
     }
   while (0 == end)
     {		
-      usleep(1000000);
+      usleep(200000);
       
       printf("\nposture goal: ");
       for (unsigned int ii(0); ii < 7; ++ii) {
@@ -647,6 +677,8 @@ int main (int argc, char ** argv)
 	prettyPrint(eepos.translation()[ii]);
       }
       printf("\n");
+      
+      controller.getTaskTable()[0]->task->dbg(cout, "", "");
       
       printf("errstr: %s\n", controller_errstr.c_str());
     }

@@ -72,11 +72,18 @@ namespace opspace {
     virtual Status check(double const * param, double value) const;
     virtual Status check(Vector const * param, Vector const & value) const;
     
+    virtual void dbg(std::ostream & os,
+		     std::string const & title,
+		     std::string const & prefix) const;
+    
   protected:
     explicit TrajectoryTask(std::string const & name);
     
-    Status initTrajectoryTask(Vector const & initpos, bool allow_scalar_to_vector);
-    Status computeCommand(Vector const & curpos, Vector const & curvel, Vector & command);
+    Status initTrajectoryTask(Vector const & initpos,
+			      bool allow_scalar_to_vector);
+    Status computeCommand(Vector const & curpos,
+			  Vector const & curvel,
+			  Vector & command);
     
     TypeIOTGCursor * cursor_;
     double dt_seconds_;
