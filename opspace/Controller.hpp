@@ -36,42 +36,58 @@
 #include <opspace/Task.hpp>
 
 namespace opspace {
-  
-  
+
+
   class Controller
   {
   public:
     struct task_info_s {
-      task_info_s(Task * tt, bool co, size_t ii)
-	: task(tt), controller_owned(co), index(ii) {}
+      task_info_s(Task * tt, bool co)
+	: task(tt), controller_owned(co) {}
       
       Task * task;
       bool controller_owned;
-      size_t index;
-      Matrix lambda;
-      Matrix jbar;
-      Matrix nullspace;
-      Vector tau_full;
-      Vector tau_projected;
     };
     
     typedef std::vector<task_info_s *> task_table_t;
     
-    Controller();
+    explicit Controller(std::ostream * dbg = 0);
     virtual ~Controller();
     
     /** \note Transfers ownership of the task object if you set
 	controller_owned to true. Controller-owned tasks get deleted
 	in the Controller destructor. */
     task_info_s const * appendTask(Task * task, bool controller_owned);
+    
     task_table_t const & getTaskTable() const { return task_table_; };
     
     Status init(Model const & model);
-    Status computeCommand(Model const & model, Vector & gamma);
+    virtual Status computeCommand(Model const & model, Vector & gamma) = 0;
     
   protected:
+    std::ostream * dbg_;
     task_table_t task_table_;
     bool initialized_;
   };
+  
+  
+  class SController
+    : public Controller
+  {
+  public:
+    SController(std::ostream * dbg = 0);
+    
+    virtual Status computeCommand(Model const & model, Vector & gamma);
+  };
+  
+  
+  // class LController
+  //   : public Controller
+  // {
+  // public:
+  //   LController(std::ostream * dbg = 0);
+    
+  //   virtual Status computeCommand(Model const & model, Vector & gamma);
+  // };
   
 }

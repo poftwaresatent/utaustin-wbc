@@ -122,7 +122,7 @@ int main(int argc, char ** argv)
     even.dump(cout, "even task after update", "  ");
     
     warnx("creating and initializing ctrl");
-    Controller ctrl;
+    SController ctrl(&cout);
     ctrl.appendTask(&odd, false);
     ctrl.appendTask(&even, false);
     st = ctrl.init(*puma);
@@ -135,19 +135,6 @@ int main(int argc, char ** argv)
     st = ctrl.computeCommand(*puma, gamma);
     if ( ! st) {
       throw runtime_error("ctrl computeCommand() failed: " + st.errstr);
-    }
-    
-    cout << "task matrices:\n";
-    {
-      Controller::task_table_t const & task_table(ctrl.getTaskTable());
-      for (size_t ii(0); ii < task_table.size(); ++ii) {
-	cout << "  level " << ii << ": task `" << task_table[ii]->task->getName() << "'\n";
-	pretty_print(task_table[ii]->lambda, cout, "    lambda", "      ");
-	pretty_print(task_table[ii]->jbar, cout, "    jbar", "      ");
-	pretty_print(task_table[ii]->nullspace, cout, "    nullspace", "      ");
-	pretty_print(task_table[ii]->tau_full, cout, "    tau_full", "      ");
-	pretty_print(task_table[ii]->tau_projected, cout, "    tau_projected", "      ");
-      }
     }
     pretty_print(gamma, cout, "final command", "  ");
     
@@ -176,7 +163,7 @@ int main(int argc, char ** argv)
     pretty_print(tau_check_one, cout, "verification command one", "  ");
 
     warnx("creating and initializing verification controller");
-    Controller ctrl_two;
+    SController ctrl_two(&cout);
     ctrl_two.appendTask(&all, false);
     st = ctrl_two.init(*puma);
     if ( ! st) {
@@ -189,19 +176,7 @@ int main(int argc, char ** argv)
     if ( ! st) {
       throw runtime_error("ctrl_two computeCommand() failed: " + st.errstr);
     }
-    {
-      Controller::task_table_t const & task_table(ctrl_two.getTaskTable());
-      cout << "verification task matrices:\n";
-      for (size_t ii(0); ii < task_table.size(); ++ii) {
-	cout << "  level " << ii << ": task `" << task_table[ii]->task->getName() << "'\n";
-	pretty_print(task_table[ii]->lambda, cout, "    lambda", "      ");
-	pretty_print(task_table[ii]->jbar, cout, "    jbar", "      ");
-	pretty_print(task_table[ii]->nullspace, cout, "    nullspace", "      ");
-	pretty_print(task_table[ii]->tau_full, cout, "    tau_full", "      ");
-	pretty_print(task_table[ii]->tau_projected, cout, "    tau_projected", "      ");
-      }
-      pretty_print(gamma_two, cout, "final command", "  ");
-    }
+    pretty_print(gamma_two, cout, "final command", "  ");
     
     cout << "final comparisons:\n";
     pretty_print(gamma, cout, "  command of two disjoint tasks", "    ");

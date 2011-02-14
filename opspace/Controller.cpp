@@ -36,12 +36,15 @@
 #include <opspace/Controller.hpp>
 #include <opspace/opspace.hpp>
 
+using jspace::pretty_print;
+
 namespace opspace {
   
   
   Controller::
-  Controller()
-    : initialized_(false)
+  Controller(std::ostream * dbg)
+    : dbg_(dbg),
+      initialized_(false)
   {
   }
   
@@ -63,7 +66,7 @@ namespace opspace {
     if (initialized_) {
       return 0;
     }
-    task_info_s * task_info(new task_info_s(task, controller_owned, task_table_.size()));
+    task_info_s * task_info(new task_info_s(task, controller_owned));
     task_table_.push_back(task_info);
     return task_info;
   }
@@ -98,7 +101,14 @@ namespace opspace {
   }
   
   
-  Status Controller::
+  SController::
+  SController(std::ostream * dbg)
+    : Controller(dbg)
+  {
+  }
+  
+  
+  Status SController::
   computeCommand(Model const & model, Vector & gamma)
   {
     if ( ! initialized_) {
@@ -127,33 +137,61 @@ namespace opspace {
       return Status(false, "failures during task updates:\n" + msg.str());
     }
     
+    if (dbg_) {
+      pretty_print(model.getState().position_, *dbg_, "DEBUG opspace::SController::computeCommand\n  jpos", "    ");
+      pretty_print(model.getState().velocity_, *dbg_, "  jvel", "    ");
+      pretty_print(grav, *dbg_, "  grav", "    ");
+      pretty_print(grav, *dbg_, "  ainv", "    ");
+    }
+    
     Matrix rangespace;
     size_t ndof(model.getNDOF());
     size_t n_minus_1(task_table_.size() - 1);
+    
     for (size_t ii(0); ii < task_table_.size(); ++ii) {
-      task_info_s * tinfo(task_table_[ii]);
-      Matrix const & jac(tinfo->task->getJacobian());
-      pseudoInverse(jac * ainv * jac.transpose(), 1e-3, tinfo->lambda);
-      tinfo->jbar = ainv * jac.transpose() * tinfo->lambda;
-      Matrix jtjbt(jac.transpose() * tinfo->jbar.transpose());
-      tinfo->tau_full
-	= jac.transpose() * tinfo->lambda * tinfo->task->getCommand()
-	+ jtjbt * grav;
+      
+      Task const * task(task_table_[ii]->task);
+      Matrix const & jac(task->getJacobian());
+      
+      Matrix lambda, jbar;
+      Vector tau;
+      
+      pseudoInverse(jac * ainv * jac.transpose(), 1e-3, lambda);
+      jbar = ainv * jac.transpose() * lambda;
+      Matrix const jtjbt(jac.transpose() * jbar.transpose());
+      tau = jac.transpose() * lambda * task->getCommand() + jtjbt * grav;
+      
+      if (dbg_) {
+	Vector const taunog(tau - jtjbt * grav);
+	*dbg_ << "  task [" << ii << "] " << task->getName() << "\n";
+	pretty_print(jac,    *dbg_, "    jac", "      ");
+	pretty_print(lambda, *dbg_, "    lambda", "      ");
+	pretty_print(jbar,   *dbg_, "    jbar", "      ");
+	pretty_print(jtjbt,  *dbg_, "    jac.t * jbar.t", "      ");
+	pretty_print(taunog, *dbg_, "    tau w/o gravity", "      ");
+	pretty_print(tau,    *dbg_, "    tau", "      ");
+      }
+      
       if (0 == ii) {
-	tinfo->nullspace
-	  = Matrix::Identity(ndof, ndof); // for this task, waste of ram and cycles...
-	tinfo->tau_projected = tinfo->tau_full;		 // waste of ram and cycles...
-	gamma = tinfo->tau_full;
+	gamma = tau;
 	rangespace = jtjbt;	// for next task
       }
       else {
-	tinfo->nullspace = Matrix::Identity(ndof, ndof) - rangespace;
-	tinfo->tau_projected = tinfo->nullspace * tinfo->tau_full;
-	gamma += tinfo->tau_projected;
+	Matrix const nullspace(Matrix::Identity(ndof, ndof) - rangespace);
+	gamma += nullspace * tau;
 	if (ii != n_minus_1) {
 	  rangespace *= jtjbt;	// for next task
 	}
+	if (dbg_) {
+	  Vector const tauproj(nullspace * tau);
+	  pretty_print(nullspace, *dbg_, "    nullspace", "      ");
+	  pretty_print(tauproj,   *dbg_, "    tau projected", "      ");
+	}
       }
+    }
+    
+    if (dbg_) {
+      pretty_print(gamma, *dbg_, "  gamma", "    ");
     }
     
     Status st;
