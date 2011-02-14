@@ -51,8 +51,10 @@ namespace opspace {
     
     typedef std::vector<task_info_s *> task_table_t;
     
-    explicit Controller(std::ostream * dbg = 0);
+    explicit Controller(std::string const & name, std::ostream * dbg = 0);
     virtual ~Controller();
+    
+    std::string const & getName() const { return name_; }
     
     /** \note Transfers ownership of the task object if you set
 	controller_owned to true. Controller-owned tasks get deleted
@@ -65,6 +67,7 @@ namespace opspace {
     virtual Status computeCommand(Model const & model, Vector & gamma) = 0;
     
   protected:
+    std::string const name_;
     std::ostream * dbg_;
     task_table_t task_table_;
     bool initialized_;
@@ -75,19 +78,19 @@ namespace opspace {
     : public Controller
   {
   public:
-    SController(std::ostream * dbg = 0);
+    explicit SController(std::string const & name, std::ostream * dbg = 0);
     
     virtual Status computeCommand(Model const & model, Vector & gamma);
   };
   
   
-  // class LController
-  //   : public Controller
-  // {
-  // public:
-  //   LController(std::ostream * dbg = 0);
+  class LController
+    : public Controller
+  {
+  public:
+    explicit LController(std::string const & name, std::ostream * dbg = 0);
     
-  //   virtual Status computeCommand(Model const & model, Vector & gamma);
-  // };
+    virtual Status computeCommand(Model const & model, Vector & gamma);
+  };
   
 }

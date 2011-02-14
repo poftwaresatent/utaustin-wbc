@@ -33,8 +33,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <gtest/gtest.h>
 #include <opspace/task_library.hpp>
-//#include <opspace/opspace.hpp>
 #include <opspace/Controller.hpp>
 #include <jspace/test/model_library.hpp>
 #include <err.h>
@@ -46,149 +46,173 @@ using namespace opspace;
 using namespace std;
 
 
+static Model * get_puma()
+{
+  static Model * puma(0);
+  if ( ! puma) {
+    puma = jspace::test::create_puma_model();
+  }
+  size_t const ndof(puma->getNDOF());
+  State state(ndof, ndof, 0);
+  for (size_t ii(0); ii < ndof; ++ii) {
+    state.position_[ii] = 0.1 * ii + 0.8;
+    state.velocity_[ii] = 0.2 - 0.05 * ii;
+  }
+  puma->update(state);
+  return puma;
+}
+
+
+TEST (task, basics)
+{
+  Model * puma(get_puma());
+  SelectedJointPostureTask odd("odd");
+  Status st;
+  
+  st = odd.update(*puma);
+  EXPECT_FALSE (st.ok) << "update before init should have failed";
+  
+  st = odd.init(*puma);
+  EXPECT_FALSE (st.ok) << "init before selection setting should have failed";
+  
+  Parameter * selection(odd.lookupParameter("selection", TASK_PARAM_TYPE_VECTOR));
+  ASSERT_NE ((void*)0, selection) << "failed to retrieve selection parameter";
+  
+  Vector sel(Vector::Zero(puma->getNDOF()));
+  for (size_t ii(0); ii < puma->getNDOF(); ii += 2) {
+    sel[ii] = 1.0;
+  }
+  st = selection->set(sel);
+  EXPECT_TRUE (st.ok) << "failed to set selection: " << st.errstr;
+  
+  st = odd.init(*puma);
+  EXPECT_TRUE (st.ok) << "init failed: " << st.errstr;
+  
+  st = odd.update(*puma);
+  EXPECT_TRUE (st.ok) << "update failed: " << st.errstr;
+}
+
+
+static SelectedJointPostureTask * create_sel_jp_task(string const & name, Vector const & selection)
+  throw(runtime_error)
+{
+  SelectedJointPostureTask * task(new SelectedJointPostureTask(name));
+  Parameter * sel_p(task->lookupParameter("selection", TASK_PARAM_TYPE_VECTOR));
+  if ( ! sel_p) {
+    delete task;
+    throw runtime_error("failed to retrieve selection parameter");
+  }
+  Status const st(sel_p->set(selection));
+  if ( ! st) {
+    delete task;
+    throw runtime_error("failed to set selection: " + st.errstr);
+  }
+  return task;
+}
+
+
+static void append_even_odd_tasks(Controller & ctrl, size_t ndof)
+  throw(runtime_error)
+{
+  vector<Task*> task;
+  try {
+    Vector sel_odd(Vector::Zero(ndof));
+    Vector sel_even(Vector::Zero(ndof));
+    for (size_t ii(0); ii < ndof; ++ii) {
+      if (0 == (ii % 2)) {
+	sel_even[ii] = 1.0;
+      }
+      else {
+	sel_odd[ii] = 1.0;
+      }
+    }
+    task.push_back(create_sel_jp_task("odd", sel_odd));
+    task.push_back(create_sel_jp_task("even", sel_even));
+    for (size_t ii(0); ii < task.size(); ++ii) {
+      if ( ! ctrl.appendTask(task[ii], true)) {
+	throw runtime_error("failed to add task `" + task[ii]->getName() + "'");
+      }
+      task[ii] = 0;	   // avoid double-free in case we throw later
+    }
+  }
+  catch (runtime_error const & ee) {
+    for (size_t ii(0); ii < task.size(); ++ii) {
+      delete task[ii];
+    }
+    throw ee;
+  }
+}
+
+
+TEST (controller, odd_even)
+{
+  Task * jpos(0);
+  Vector gamma_jpos;
+  
+  vector<Controller*> ctrl;
+  vector<ostringstream*> msg;
+  vector<Vector> gamma;
+
+  try {
+    Model * puma(get_puma());
+    Matrix aa;
+    Vector gg;
+    ASSERT_TRUE (puma->getMassInertia(aa)) << "failed to get mass inertia";
+    ASSERT_TRUE (puma->getGravity(gg)) << "failed to get gravity";
+    
+    jpos = create_sel_jp_task("all", Vector::Ones(puma->getNDOF()));
+    Status st;
+    st = jpos->init(*puma);
+    EXPECT_TRUE (st.ok) << "failed to init jpos task: " << st.errstr;
+    st = jpos->update(*puma);
+    EXPECT_TRUE (st.ok) << "failed to update jpos task: " << st.errstr;
+    gamma_jpos = aa * jpos->getCommand() + gg;
+    
+    msg.push_back(new ostringstream());
+    ctrl.push_back(new SController("Samir", msg.back()));
+    gamma.push_back(Vector::Zero(puma->getNDOF()));
+    
+    msg.push_back(new ostringstream());
+    ctrl.push_back(new LController("Luis", msg.back()));
+    gamma.push_back(Vector::Zero(puma->getNDOF()));
+    
+    for (size_t ii(0); ii < ctrl.size(); ++ii) {
+      
+      append_even_odd_tasks(*ctrl[ii], puma->getNDOF());
+      st = ctrl[ii]->init(*puma);
+      EXPECT_TRUE (st.ok) << "failed to init controller #" << ii << " `" << ctrl[ii]->getName() << "': " << st.errstr;
+      st = ctrl[ii]->computeCommand(*puma, gamma[ii]);
+      EXPECT_TRUE (st.ok) << "failed to compute torques #" << ii << " `" << ctrl[ii]->getName() << "': " << st.errstr;
+      
+      cout << "==================================================\n"
+	   << "messages from controller #" << ii << " `" << ctrl[ii]->getName() << "'\n"
+	   << "--------------------------------------------------\n"
+	   << msg[ii]->str();
+    }
+    
+    cout << "whole-body torque comparison:\n";
+    pretty_print(gamma_jpos, cout, "  reference jpos task", "    ");
+    for (size_t ii(0); ii < ctrl.size(); ++ii) {
+      pretty_print(gamma[ii], cout, "  controller `" + ctrl[ii]->getName() + "'", "    ");
+      Vector const delta(gamma_jpos - gamma[ii]);
+      pretty_print(delta, cout, "  delta", "    ");
+    }
+    
+  }
+  catch (exception const & ee) {
+    ADD_FAILURE () << "exception " << ee.what();
+    for (size_t ii(0); ii < ctrl.size(); ++ii) {
+      delete ctrl[ii];
+    }
+    for (size_t ii(0); ii < msg.size(); ++ii) {
+      delete msg[ii];
+    }
+  }
+}
+
+
 int main(int argc, char ** argv)
 {
-  Model * puma(0);
-  
-  try {
-    warnx("creating Puma model");
-    puma = jspace::test::create_puma_model();
-    size_t const ndof(puma->getNDOF());
-    State state(ndof, ndof, 0);
-    for (size_t ii(0); ii < ndof; ++ii) {
-      state.position_[ii] = 0.1 * ii + 0.8;
-      state.velocity_[ii] = 0.2 - 0.05 * ii;
-    }
-    puma->update(state);
-    
-    warnx("creating odd SelectedJointPostureTask");
-    SelectedJointPostureTask odd("odd");
-    Status st;
-    odd.dump(cout, "freshly created odd task", "  ");
-    
-    warnx("testing update before init");
-    st = odd.update(*puma);
-    if (st) {
-      throw runtime_error("odd task update() should have failed before init");
-    }
-    
-    warnx("testing init before selection setting");
-    st = odd.init(*puma);
-    if (st) {
-      throw runtime_error("odd task init() should have failed before setting selection");
-    }
-    
-    warnx("retrieving selection parameter");
-    Parameter * selection(odd.lookupParameter("selection", TASK_PARAM_TYPE_VECTOR));
-    if ( ! selection) {
-      throw runtime_error("failed to retrieve selection parameter");
-    }
-    
-    warnx("trying to set selection");
-    Vector sel(Vector::Zero(ndof));
-    for (size_t ii(0); ii < ndof; ii += 2) {
-      sel[ii] = 1.0;
-    }
-    st = selection->set(sel);
-    if ( ! st) {
-      throw runtime_error("failed to set selection: " + st.errstr);
-    }
-    odd.dump(cout, "odd task after setting selection", "  ");
-    
-    warnx("testing init");
-    st = odd.init(*puma);
-    if ( ! st) {
-      throw runtime_error("odd task init() failed: " + st.errstr);
-    }
-    odd.dump(cout, "freshly initialized odd task", "  ");
-    
-    warnx("testing update");
-    st = odd.update(*puma);
-    if ( ! st) {
-      throw runtime_error("odd task update() failed: " + st.errstr);
-    }
-    odd.dump(cout, "odd task after update", "  ");
-    
-    warnx("creating, initializing, and updating even task");
-    SelectedJointPostureTask even("even");
-    selection = even.lookupParameter("selection", TASK_PARAM_TYPE_VECTOR);
-    sel = Vector::Zero(ndof);
-    for (size_t ii(1); ii < ndof; ii += 2) {
-      sel[ii] = 1.0;
-    }
-    selection->set(sel);
-    even.init(*puma);
-    even.update(*puma);
-    even.dump(cout, "even task after update", "  ");
-    
-    warnx("creating and initializing ctrl");
-    SController ctrl(&cout);
-    ctrl.appendTask(&odd, false);
-    ctrl.appendTask(&even, false);
-    st = ctrl.init(*puma);
-    if ( ! st) {
-      throw runtime_error("ctrl init() failed: " + st.errstr);
-    }
-    
-    warnx("computing command");
-    Vector gamma;
-    st = ctrl.computeCommand(*puma, gamma);
-    if ( ! st) {
-      throw runtime_error("ctrl computeCommand() failed: " + st.errstr);
-    }
-    pretty_print(gamma, cout, "final command", "  ");
-    
-    warnx("comparing against full joint posture task");
-    SelectedJointPostureTask all("all");
-    selection = all.lookupParameter("selection", TASK_PARAM_TYPE_VECTOR);
-    sel = Vector::Ones(ndof);
-    selection->set(sel);
-    all.dump(cout, "all task before init", "  ");
-    all.init(*puma);
-    all.dump(cout, "all task after init", "  ");
-    all.update(*puma);
-    all.dump(cout, "all task after update", "  ");
-    
-    warnx("computing verification torque");
-    Matrix aa;
-    if ( ! puma->getMassInertia(aa)) {
-      throw runtime_error("failed to get mass inertia");
-    }
-    Vector gg;
-    if ( ! puma->getGravity(gg)) {
-      throw runtime_error("failed to get gravity");
-    }
-    Vector tau_check_one;
-    tau_check_one = aa * all.getCommand() + gg;
-    pretty_print(tau_check_one, cout, "verification command one", "  ");
-
-    warnx("creating and initializing verification controller");
-    SController ctrl_two(&cout);
-    ctrl_two.appendTask(&all, false);
-    st = ctrl_two.init(*puma);
-    if ( ! st) {
-      throw runtime_error("ctrl_two init() failed: " + st.errstr);
-    }
-    
-    warnx("computing second verification torque");
-    Vector gamma_two;
-    st = ctrl_two.computeCommand(*puma, gamma_two);
-    if ( ! st) {
-      throw runtime_error("ctrl_two computeCommand() failed: " + st.errstr);
-    }
-    pretty_print(gamma_two, cout, "final command", "  ");
-    
-    cout << "final comparisons:\n";
-    pretty_print(gamma, cout, "  command of two disjoint tasks", "    ");
-    pretty_print(gamma_two, cout, "  command of one full-rank task", "    ");
-    pretty_print(tau_check_one, cout, "  command of \"manual\" dynamics compensation", "    ");
-  }
-  
-  catch (runtime_error const & ee) {
-    delete puma;
-    errx(EXIT_FAILURE, "EXCEPTION: %s", ee.what());
-  }
-  
-  warnx("done with all tests");
-  delete puma;
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS ();
 }

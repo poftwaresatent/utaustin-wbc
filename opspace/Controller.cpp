@@ -42,8 +42,9 @@ namespace opspace {
   
   
   Controller::
-  Controller(std::ostream * dbg)
-    : dbg_(dbg),
+  Controller(std::string const & name, std::ostream * dbg)
+    : name_(name),
+      dbg_(dbg),
       initialized_(false)
   {
   }
@@ -102,8 +103,8 @@ namespace opspace {
   
   
   SController::
-  SController(std::ostream * dbg)
-    : Controller(dbg)
+  SController(std::string const & name, std::ostream * dbg)
+    : Controller(name, dbg)
   {
   }
   
@@ -141,12 +142,12 @@ namespace opspace {
       pretty_print(model.getState().position_, *dbg_, "DEBUG opspace::SController::computeCommand\n  jpos", "    ");
       pretty_print(model.getState().velocity_, *dbg_, "  jvel", "    ");
       pretty_print(grav, *dbg_, "  grav", "    ");
-      pretty_print(grav, *dbg_, "  ainv", "    ");
+      pretty_print(ainv, *dbg_, "  ainv", "    ");
     }
     
     Matrix rangespace;
-    size_t ndof(model.getNDOF());
-    size_t n_minus_1(task_table_.size() - 1);
+    size_t const ndof(model.getNDOF());
+    size_t const n_minus_1(task_table_.size() - 1);
     
     for (size_t ii(0); ii < task_table_.size(); ++ii) {
       
@@ -197,5 +198,126 @@ namespace opspace {
     Status st;
     return st;
   }
+  
+  
+  LController::
+  LController(std::string const & name, std::ostream * dbg)
+    : Controller(name, dbg)
+  {
+  }
+  
+  
+  Status LController::
+  computeCommand(Model const & model, Vector & gamma)
+  {
+    if ( ! initialized_) {
+      return Status(false, "not initialized");
+    }
+    Matrix ainv;
+    if ( ! model.getInverseMassInertia(ainv)) {
+      return Status(false, "failed to retrieve inverse mass inertia");
+    }
+    Vector grav;
+    if ( ! model.getGravity(grav)) {
+      return Status(false, "failed to retrieve gravity torques");
+    }
+    
+    std::ostringstream msg;
+    bool ok(true);
+    for (size_t ii(0); ii < task_table_.size(); ++ii) {
+      Task * task(task_table_[ii]->task);
+      Status const st(task->update(model));
+      if ( ! st) {
+	msg << "  task[" << ii << "] `" << task->getName() << "': " << st.errstr << "\n";
+	ok = false;
+      }
+    }
+    if ( ! ok) {
+      return Status(false, "failures during task updates:\n" + msg.str());
+    }
+    
+    if (dbg_) {
+      pretty_print(model.getState().position_, *dbg_, "DEBUG opspace::LController::computeCommand\n  jpos", "    ");
+      pretty_print(model.getState().velocity_, *dbg_, "  jvel", "    ");
+      pretty_print(grav, *dbg_, "  grav", "    ");
+      pretty_print(ainv, *dbg_, "  ainv", "    ");
+    }
+    
+    size_t const ndof(model.getNDOF());
+    size_t const n_minus_1(task_table_.size() - 1);
+    Matrix nullspace(Matrix::Identity(ndof, ndof));
+    
+    for (size_t ii(0); ii < task_table_.size(); ++ii) {
+      
+      Task const * task(task_table_[ii]->task);
+      Matrix const & jac(task->getJacobian());
 
+      if (dbg_) {
+	*dbg_ << "  task [" << ii << "] " << task->getName() << "\n";
+	pretty_print(jac, *dbg_, "    jac", "      ");
+      }
+      
+      Matrix jstar;
+      if (ii == 0) {
+	jstar = jac;
+      }
+      else {
+	jstar = jac * nullspace;
+	if (dbg_) {
+	  pretty_print(nullspace, *dbg_, "    nullspace", "      ");
+	  pretty_print(jstar,     *dbg_, "    jstar", "      ");
+	}
+      }
+      
+      Matrix lstar;
+      pseudoInverse(jstar * ainv * jstar.transpose(), 1e-3, lstar);
+      Vector pstar;
+      pstar = lstar * jstar * ainv * grav; // same would go for coriolis-centrifugal...
+      
+      if (dbg_) {
+	pretty_print(lstar, *dbg_, "    lstar", "      ");
+	pretty_print(pstar, *dbg_, "    pstar", "      ");
+      }
+      
+      // could add coriolis-centrifugal just like pstar...
+      if (ii == 0) {
+	gamma += jstar.transpose() * (lstar * task->getCommand() + pstar);
+	if (dbg_) {
+	  Vector const taunog(jstar.transpose() * (lstar * task->getCommand()));
+	  Vector const tau(jstar.transpose() * (lstar * task->getCommand() + pstar));
+	  pretty_print(taunog, *dbg_, "    tau w/o gravity", "      ");
+	  pretty_print(tau,    *dbg_, "    tau", "      ");
+	}
+      }
+      else {
+	Vector fcomp;
+	// here, gamma is still at the previous iteration's value
+	fcomp = lstar * jstar * ainv * gamma;
+	gamma += jstar.transpose() * (lstar * task->getCommand() + pstar - fcomp);
+	if (dbg_) {
+	  Vector const taunog(jstar.transpose() * (lstar * task->getCommand()));
+	  Vector const tau(jstar.transpose() * (lstar * task->getCommand() + pstar - fcomp));
+	  pretty_print(fcomp,  *dbg_, "    fcomp", "      ");
+	  pretty_print(taunog, *dbg_, "    tau w/o (grav, comp)", "      ");
+	  pretty_print(tau,    *dbg_, "    tau", "      ");
+	}
+	
+      }
+      
+      if (ii != n_minus_1) {
+	// not sure whether Eigen2 correctly handles the case where a
+	// matrix gets updated by left-multiplication...
+	Matrix const nnext((Matrix::Identity(ndof, ndof) - ainv * jstar.transpose() * lstar * jstar) * nullspace);
+	nullspace = nnext;
+      }
+    }
+    
+    if (dbg_) {
+      pretty_print(gamma, *dbg_, "  gamma", "    ");
+    }
+    
+    Status st;
+    return st;
+  }
+  
 }

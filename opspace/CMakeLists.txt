@@ -20,8 +20,10 @@ target_link_libraries (opspace jspace reflexxes_otg yaml-cpp)
 add_executable (hello_world hello_world.cpp)
 target_link_libraries (hello_world opspace)
 
-add_executable (testTask testTask.cpp)
-target_link_libraries (testTask opspace jspace_test)
+if (HAVE_GTEST)
+  add_executable (testTask testTask.cpp)
+  target_link_libraries (testTask opspace jspace_test gtest)
+endif (HAVE_GTEST)
 
 add_executable (testTaskFactory testTaskFactory.cpp)
 target_link_libraries (testTaskFactory opspace)
