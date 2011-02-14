@@ -88,26 +88,8 @@ using namespace std;
 //////////////////////////////////////////////////
 // command line arguments
 
-static string model_filename("/home/meka/mekabot/wbc-utexas/robospecs/m3_with_hand.xml");
-static string tasks_filename("");
 static Vector eegoal, jgoal;
 static int goal_switch_delay(-1);
-static char const * tasks_default =
-  "- type: opspace::PositionTask\n"
-  "  name: eepos\n"
-  "  control_point: [ 0.0, -0.15, 0.0 ]\n"
-  "  dt_seconds: 0.002\n"
-  "  kp: [ 150.0 ]\n"
-  "  kd: [  20.0 ]\n"
-  "  maxvel: [ 0.5 ]\n"
-  "  maxacc: [ 1.5 ]\n"
-  "- type: opspace::PostureTask\n"
-  "  name: posture\n"
-  "  dt_seconds: 0.002\n"
-  "  kp: [ 100.0 ]\n"
-  "  kd: [   5.0, 5.0, 5.0, 5.0, 25.0, 25.0, 25.0 ]\n"
-  "  maxvel: [ 3.1416 ]\n"
-  "  maxacc: [ 6.2832 ]\n";
 
 ////////////////////////////////////////////////////////////////////////////////////
 // shared memory stuff
@@ -170,7 +152,7 @@ int64_t GetTimestamp()
 
 static string controller_errstr;
 static boost::shared_ptr<Model> model;
-static Controller controller;
+static boost::shared_ptr<Controller> controller;
 static Parameter * eegoal_p(0);
 static Parameter * jgoal_p(0);
 static taoDNode * right_hand(0);
@@ -250,7 +232,7 @@ static void* rt_system_thread(void * arg)
       
       if (first_iteration) {
 	bool ok(true);
-	Status status(controller.init(*model));
+	Status status(controller->init(*model));
 	if ( ! status) {
 	  warnx("ERROR: controller failed to initialize: %s",
 		status.errstr.c_str());
@@ -317,7 +299,7 @@ static void* rt_system_thread(void * arg)
       
       Vector tau;
       tau.setZero(7);
-      Status status(controller.computeCommand(*model, tau));
+      Status status(controller->computeCommand(*model, tau));
       if ( ! status) {
 	controller_errstr = status.errstr;
 	tau = - 10.0 * model->getState().velocity_;
@@ -382,6 +364,7 @@ static void usage(ostream & os)
      << "   -h             help (this message)\n"
      << "   -f filename    specify robot model (SAI XML file)\n"
      << "   -t filename    specify task definition (YAML file)\n"
+     << "   -c name        controller type name (default LController)\n"
      << "   -e eegoal      end-effector goal [m] (space-separated)\n"
      << "   -j jgoal       posture goal [deg] (space-separated)\n"
      << "   -d delay       delay [s] between switching goals\n";
@@ -390,6 +373,26 @@ static void usage(ostream & os)
 
 void parse_options(int argc, char ** argv)
 {
+  string model_filename("/home/meka/mekabot/wbc-utexas/robospecs/m3_with_hand.xml");
+  string tasks_filename("");
+  string controller_typename("LController");
+  static char const * tasks_default =
+    "- type: opspace::PositionTask\n"
+    "  name: eepos\n"
+    "  control_point: [ 0.0, -0.15, 0.0 ]\n"
+    "  dt_seconds: 0.002\n"
+    "  kp: [ 150.0 ]\n"
+    "  kd: [  20.0 ]\n"
+    "  maxvel: [ 0.5 ]\n"
+    "  maxacc: [ 1.5 ]\n"
+    "- type: opspace::PostureTask\n"
+    "  name: posture\n"
+    "  dt_seconds: 0.002\n"
+    "  kp: [ 100.0 ]\n"
+    "  kd: [   5.0, 5.0, 5.0, 5.0, 25.0, 25.0, 25.0 ]\n"
+    "  maxvel: [ 3.1416 ]\n"
+    "  maxacc: [ 6.2832 ]\n";
+  
   for (int ii(1); ii < argc; ++ii) {
     if ((strlen(argv[ii]) < 2) || ('-' != argv[ii][0])) {
       cerr << argv[0] << ": problem with option '" << argv[ii] << "'\n";
@@ -423,6 +426,17 @@ void parse_options(int argc, char ** argv)
  	}
 	tasks_filename = argv[ii];
 	warnx("tasks_filename: %s", tasks_filename.c_str());
+ 	break;
+
+      case 'c':
+ 	++ii;
+ 	if (ii >= argc) {
+ 	  cerr << argv[0] << ": -c requires parameter\n";
+ 	  usage(cerr);
+ 	  exit(EXIT_FAILURE);
+ 	}
+	controller_typename = argv[ii];
+	warnx("controller_typename: %s", tasks_filename.c_str());
  	break;
 	
       case 'e':
@@ -514,6 +528,24 @@ void parse_options(int argc, char ** argv)
       }
   }
   
+  if ("LController" == controller_typename) {
+    controller.reset(new LController(controller_typename));
+  } 
+  else if ("SController" == controller_typename) {
+    controller.reset(new SController(controller_typename));
+  }
+  else if ("TPController" == controller_typename) {
+    controller.reset(new TPController(controller_typename));
+  }
+  else {
+    errx(EXIT_FAILURE,
+	 "invalid controller type `%s', use one of these:\n"
+	 "  LController\n"
+	 "  SController\n"
+	 "  TPController\n",
+	 controller_typename.c_str());
+  }
+  
   try {
     model.reset(parse_sai_xml_file(model_filename, false));
     right_hand = model->getNodeByName("right-hand");
@@ -543,7 +575,7 @@ void parse_options(int argc, char ** argv)
   if (2 > ttab.size()) {
     errx(EXIT_FAILURE, "tasks file `%s' should define at least two tasks",
 	 tasks_filename.c_str());
-  }
+  }  
   for (size_t ii(0); ii < ttab.size(); ++ii) {
     Task * task(ttab[ii]);
     if (0 == ii) {
@@ -578,7 +610,7 @@ void parse_options(int argc, char ** argv)
     else {
       warnx("unexpected task `%s' in tasks file", task->getName().c_str());
     }
-    controller.appendTask(task, true);
+    controller->appendTask(task, true);
   }
 }
 
@@ -678,7 +710,7 @@ int main (int argc, char ** argv)
       }
       printf("\n");
       
-      controller.getTaskTable()[0]->task->dbg(cout, "", "");
+      controller->getTaskTable()[0]->task->dbg(cout, "", "");
       
       printf("errstr: %s\n", controller_errstr.c_str());
     }
