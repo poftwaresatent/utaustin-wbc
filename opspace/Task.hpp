@@ -185,17 +185,19 @@ namespace opspace {
     Parameter * lookupParameter(std::string const & name, task_param_type_t type);
     Parameter const * lookupParameter(std::string const & name, task_param_type_t type) const;
     
-    virtual Status check(int const * param, int value) const               { Status ok; return ok; }
-    virtual Status check(double const * param, double value) const         { Status ok; return ok; }
-    virtual Status check(Vector const * param, Vector const & value) const { Status ok; return ok; }
-    virtual Status check(Matrix const * param, Matrix const & value) const { Status ok; return ok; }
+    virtual Status check(int const * param, int value) const;
+    virtual Status check(double const * param, double value) const;
+    virtual Status check(Vector const * param, Vector const & value) const;
+    virtual Status check(Matrix const * param, Matrix const & value) const;
     
     parameter_table_t & getParameterTable()             { return parameter_table_; }
     parameter_table_t const & getParameterTable() const { return parameter_table_; }
     
     void dump(std::ostream & os, std::string const & title, std::string const & prefix) const;
     
-    virtual void dbg(std::ostream & os, std::string const & title, std::string const & prefix) const {}
+    virtual void dbg(std::ostream & os,
+		     std::string const & title,
+		     std::string const & prefix) const;
     
   protected:
     typedef std::map<std::string, Parameter *> parameter_lookup_t;
