@@ -55,8 +55,8 @@ static Model * get_puma()
   size_t const ndof(puma->getNDOF());
   State state(ndof, ndof, 0);
   for (size_t ii(0); ii < ndof; ++ii) {
-    state.position_[ii] = 0.1 * ii + 0.8;
-    state.velocity_[ii] = 0.2 - 0.05 * ii;
+    state.position_[ii] = 0.01 * ii + 0.08;
+    state.velocity_[ii] = 0.02 - 0.005 * ii;
   }
   puma->update(state);
   return puma;
