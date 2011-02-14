@@ -43,6 +43,30 @@ namespace opspace {
   class TypeIOTGCursor;
   
   
+  class PDTask
+    : public Task
+  {
+  public:
+    virtual Status check(Vector const * param, Vector const & value) const;
+    
+  protected:
+    explicit PDTask(std::string const & name);
+    
+    Status initPDTask(Vector const & initpos,
+		      bool allow_scalar_to_vector);
+    Status computePDCommand(Vector const & curpos,
+			    Vector const & curvel,
+			    Vector & command);
+    
+    bool initialized_;
+    Vector goalpos_;
+    Vector goalvel_;
+    Vector kp_;
+    Vector kd_;
+    Vector maxvel_;
+  };
+  
+  
   class SelectedJointPostureTask
     : public Task
   {
@@ -81,9 +105,9 @@ namespace opspace {
     
     Status initTrajectoryTask(Vector const & initpos,
 			      bool allow_scalar_to_vector);
-    Status computeCommand(Vector const & curpos,
-			  Vector const & curvel,
-			  Vector & command);
+    Status computeTrajectoryCommand(Vector const & curpos,
+				    Vector const & curvel,
+				    Vector & command);
     
     TypeIOTGCursor * cursor_;
     double dt_seconds_;

@@ -39,6 +39,107 @@
 using jspace::pretty_print;
 
 namespace opspace {
+
+
+  PDTask::
+  PDTask(std::string const & name)
+    : Task(name),
+      initialized_(false)
+  {
+    declareParameter("goalpos", &goalpos_);
+    declareParameter("goalvel", &goalvel_);
+    declareParameter("kp", &kp_);
+    declareParameter("kd", &kd_);
+    declareParameter("maxvel", &maxvel_);
+  }
+  
+  
+  Status PDTask::
+  check(Vector const * param, Vector const & value) const
+  {
+    if ((param == &kp_) || (param == &kd_) || (param == &maxvel_)) {
+      for (size_t ii(0); ii < value.rows(); ++ii) {
+	if (0 > value[ii]) {
+	  return Status(false, "gains and limits must be >= 0");
+	}
+      }
+    }
+    if (initialized_) {
+      if ((param == &kp_) || (param == &kd_) || (param == &maxvel_)
+	  || (param == &goalpos_) || (param == &goalvel_)) {
+	if (goalpos_.rows() != value.rows()) {
+	  return Status(false, "invalid dimension");
+	}
+      }
+    }
+    return Status();
+  }
+  
+  
+  Status PDTask::
+  initPDTask(Vector const & initpos,
+	     bool allow_scalar_to_vector)
+  {
+    int const ndim(initpos.rows());
+    if (ndim != kp_.rows()) {
+      if ((ndim != 1) && (1 == kp_.rows()) && allow_scalar_to_vector) {
+	kp_ = kp_[0] * Vector::Ones(ndim);
+      }
+      else {
+	return Status(false, "you did not (correctly) set kp");
+      }
+    }
+    if (ndim != kd_.rows()) {
+      if ((ndim != 1) && (1 == kd_.rows()) && allow_scalar_to_vector) {
+	kd_ = kd_[0] * Vector::Ones(ndim);
+      }
+      else {
+	return Status(false, "you did not (correctly) set kd");
+      }
+    }
+    if (ndim != maxvel_.rows()) {
+      if ((ndim != 1) && (1 == maxvel_.rows()) && allow_scalar_to_vector) {
+	maxvel_ = maxvel_[0] * Vector::Ones(ndim);
+      }
+      else {
+	return Status(false, "you did not (correctly) set maxvel");
+      }
+    }
+    
+    goalpos_ = initpos;
+    goalvel_ = Vector::Zero(ndim);
+    initialized_ = true;
+    
+    Status ok;
+    return ok;
+  }
+  
+  
+  Status PDTask::
+  computePDCommand(Vector const & curpos,
+		   Vector const & curvel,
+		   Vector & command)
+  {
+    Status st;
+    if ( ! initialized_) {
+      st.ok = false;
+      st.errstr = "not initialized";
+    }
+    else {
+      command = kp_.cwise() * (goalpos_ - curpos);
+      // component-wise velocity saturation, beware of div by zero
+      for (int ii(0); ii < command.rows(); ++ii) {
+	if ((maxvel_[ii] > 1e-4) && (kd_[ii] > 1e-4)) {
+	  double const sat(fabs((command[ii] / maxvel_[ii]) / kd_[ii]));
+	  if (sat > 1.0) {
+	    command[ii] /= sat;
+	  }
+	}
+      }
+      command += kd_.cwise() * (goalvel_ - curvel);
+    }
+    return st;
+  }
   
   
   SelectedJointPostureTask::
@@ -207,9 +308,9 @@ namespace opspace {
   
   
   Status TrajectoryTask::
-  computeCommand(Vector const & curpos,
-		 Vector const & curvel,
-		 Vector & command)
+  computeTrajectoryCommand(Vector const & curpos,
+			   Vector const & curvel,
+			   Vector & command)
   {
     if ( ! cursor_) {
       return Status(false, "not initialized");
@@ -226,12 +327,12 @@ namespace opspace {
     }
     
     //
-    // XXXX to do: implement PD velocity saturation at maxvel_ (in
-    // addition to the velocity-limited trajectory)
+    // XXXX to do: (see also PDTask) implement PD velocity saturation
+    // at maxvel_ (in addition to the velocity-limited trajectory)
     //
-    command_
-      = kp_.cwise() * (curpos - cursor_->position())
-      + kd_.cwise() * (curvel - cursor_->velocity());
+    command
+      = kp_.cwise() * (cursor_->position() - curpos)
+      + kd_.cwise() * (cursor_->velocity() - curvel);
     
     Status ok;
     return ok;
@@ -333,9 +434,9 @@ namespace opspace {
     }
     jacobian_ = Jfull.block(0, 0, 3, Jfull.cols());
     
-    return computeCommand(actual_,
-			  jacobian_ * model.getState().velocity_,
-			  command_);
+    return computeTrajectoryCommand(actual_,
+				    jacobian_ * model.getState().velocity_,
+				    command_);
   }
   
   
@@ -375,7 +476,7 @@ namespace opspace {
   update(Model const & model)
   {
     actual_ = model.getState().position_;
-    return computeCommand(actual_, model.getState().velocity_, command_);
+    return computeTrajectoryCommand(actual_, model.getState().velocity_, command_);
   }
   
 }
