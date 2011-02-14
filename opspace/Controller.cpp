@@ -287,7 +287,8 @@ namespace opspace {
       
       // could add coriolis-centrifugal just like pstar...
       if (ii == 0) {
-	gamma += jstar.transpose() * (lstar * task->getCommand() + pstar);
+	// first time around: initialize gamma
+	gamma = jstar.transpose() * (lstar * task->getCommand() + pstar);
 	if (dbg_) {
 	  Vector const taunog(jstar.transpose() * (lstar * task->getCommand()));
 	  Vector const tau(jstar.transpose() * (lstar * task->getCommand() + pstar));
