@@ -111,7 +111,7 @@ static SelectedJointPostureTask * create_sel_jp_task(string const & name, Vector
 }
 
 
-static void append_even_odd_tasks(Controller & ctrl, size_t ndof)
+static void append_odd_even_tasks(Controller & ctrl, size_t ndof)
   throw(runtime_error)
 {
   vector<Task*> task;
@@ -128,6 +128,34 @@ static void append_even_odd_tasks(Controller & ctrl, size_t ndof)
     }
     task.push_back(create_sel_jp_task("odd", sel_odd));
     task.push_back(create_sel_jp_task("even", sel_even));
+    for (size_t ii(0); ii < task.size(); ++ii) {
+      if ( ! ctrl.appendTask(task[ii], true)) {
+	throw runtime_error("failed to add task `" + task[ii]->getName() + "'");
+      }
+      task[ii] = 0;	   // avoid double-free in case we throw later
+    }
+  }
+  catch (runtime_error const & ee) {
+    for (size_t ii(0); ii < task.size(); ++ii) {
+      delete task[ii];
+    }
+    throw ee;
+  }
+}
+
+
+static void append_odd_full_tasks(Controller & ctrl, size_t ndof)
+  throw(runtime_error)
+{
+  vector<Task*> task;
+  try {
+    Vector sel_odd(Vector::Zero(ndof));
+    Vector sel_full(Vector::Ones(ndof));
+    for (size_t ii(1); ii < ndof; ii += 2) {
+      sel_odd[ii] = 1.0;
+    }
+    task.push_back(create_sel_jp_task("odd", sel_odd));
+    task.push_back(create_sel_jp_task("full", sel_full));
     for (size_t ii(0); ii < task.size(); ++ii) {
       if ( ! ctrl.appendTask(task[ii], true)) {
 	throw runtime_error("failed to add task `" + task[ii]->getName() + "'");
@@ -178,11 +206,13 @@ TEST (controller, odd_even)
     
     for (size_t ii(0); ii < ctrl.size(); ++ii) {
       
-      append_even_odd_tasks(*ctrl[ii], puma->getNDOF());
+      append_odd_even_tasks(*ctrl[ii], puma->getNDOF());
       st = ctrl[ii]->init(*puma);
-      EXPECT_TRUE (st.ok) << "failed to init controller #" << ii << " `" << ctrl[ii]->getName() << "': " << st.errstr;
+      EXPECT_TRUE (st.ok) << "failed to init controller #"
+			  << ii << " `" << ctrl[ii]->getName() << "': " << st.errstr;
       st = ctrl[ii]->computeCommand(*puma, gamma[ii]);
-      EXPECT_TRUE (st.ok) << "failed to compute torques #" << ii << " `" << ctrl[ii]->getName() << "': " << st.errstr;
+      EXPECT_TRUE (st.ok) << "failed to compute torques #"
+			  << ii << " `" << ctrl[ii]->getName() << "': " << st.errstr;
       
       cout << "==================================================\n"
 	   << "messages from controller #" << ii << " `" << ctrl[ii]->getName() << "'\n"
@@ -190,7 +220,82 @@ TEST (controller, odd_even)
 	   << msg[ii]->str();
     }
     
-    cout << "whole-body torque comparison:\n";
+    cout << "==================================================\n"
+	 << "whole-body torque comparison:\n";
+    pretty_print(gamma_jpos, cout, "  reference jpos task", "    ");
+    for (size_t ii(0); ii < ctrl.size(); ++ii) {
+      pretty_print(gamma[ii], cout, "  controller `" + ctrl[ii]->getName() + "'", "    ");
+      Vector const delta(gamma_jpos - gamma[ii]);
+      pretty_print(delta, cout, "  delta", "    ");
+    }
+    
+  }
+  catch (exception const & ee) {
+    ADD_FAILURE () << "exception " << ee.what();
+    for (size_t ii(0); ii < ctrl.size(); ++ii) {
+      delete ctrl[ii];
+    }
+    for (size_t ii(0); ii < msg.size(); ++ii) {
+      delete msg[ii];
+    }
+  }
+}
+
+
+TEST (controller, odd_full)
+{
+  Task * jpos(0);
+  Vector gamma_jpos;
+  
+  vector<Controller*> ctrl;
+  vector<ostringstream*> msg;
+  vector<Vector> gamma;
+
+  try {
+    Model * puma(get_puma());
+    Matrix aa;
+    Vector gg;
+    ASSERT_TRUE (puma->getMassInertia(aa)) << "failed to get mass inertia";
+    ASSERT_TRUE (puma->getGravity(gg)) << "failed to get gravity";
+    
+    jpos = create_sel_jp_task("all", Vector::Ones(puma->getNDOF()));
+    Status st;
+    st = jpos->init(*puma);
+    EXPECT_TRUE (st.ok) << "failed to init jpos task: " << st.errstr;
+    st = jpos->update(*puma);
+    EXPECT_TRUE (st.ok) << "failed to update jpos task: " << st.errstr;
+    gamma_jpos = aa * jpos->getCommand() + gg;
+    
+    msg.push_back(new ostringstream());
+    ctrl.push_back(new SController("Samir", msg.back()));
+    gamma.push_back(Vector::Zero(puma->getNDOF()));
+    
+    msg.push_back(new ostringstream());
+    ctrl.push_back(new LController("Luis", msg.back()));
+    gamma.push_back(Vector::Zero(puma->getNDOF()));
+    
+    msg.push_back(new ostringstream());
+    ctrl.push_back(new TPController("TaskPosture", msg.back()));
+    gamma.push_back(Vector::Zero(puma->getNDOF()));
+    
+    for (size_t ii(0); ii < ctrl.size(); ++ii) {
+      
+      append_odd_full_tasks(*ctrl[ii], puma->getNDOF());
+      st = ctrl[ii]->init(*puma);
+      EXPECT_TRUE (st.ok) << "failed to init controller #"
+			  << ii << " `" << ctrl[ii]->getName() << "': " << st.errstr;
+      st = ctrl[ii]->computeCommand(*puma, gamma[ii]);
+      EXPECT_TRUE (st.ok) << "failed to compute torques #"
+			  << ii << " `" << ctrl[ii]->getName() << "': " << st.errstr;
+      
+      cout << "==================================================\n"
+	   << "messages from controller #" << ii << " `" << ctrl[ii]->getName() << "'\n"
+	   << "--------------------------------------------------\n"
+	   << msg[ii]->str();
+    }
+    
+    cout << "==================================================\n"
+	 << "whole-body torque comparison:\n";
     pretty_print(gamma_jpos, cout, "  reference jpos task", "    ");
     for (size_t ii(0); ii < ctrl.size(); ++ii) {
       pretty_print(gamma[ii], cout, "  controller `" + ctrl[ii]->getName() + "'", "    ");

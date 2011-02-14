@@ -63,7 +63,7 @@ namespace opspace {
     
     task_table_t const & getTaskTable() const { return task_table_; };
     
-    Status init(Model const & model);
+    virtual Status init(Model const & model);
     virtual Status computeCommand(Model const & model, Vector & gamma) = 0;
     
   protected:
@@ -91,6 +91,21 @@ namespace opspace {
     explicit LController(std::string const & name, std::ostream * dbg = 0);
     
     virtual Status computeCommand(Model const & model, Vector & gamma);
+  };
+  
+  
+  class TPController
+    : public Controller
+  {
+  public:
+    explicit TPController(std::string const & name, std::ostream * dbg = 0);
+    
+    virtual Status init(Model const & model);
+    virtual Status computeCommand(Model const & model, Vector & gamma);
+    
+  protected:
+    Task * task_;
+    Task * posture_;
   };
   
 }
