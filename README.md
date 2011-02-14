@@ -24,6 +24,14 @@ And then build it like so (unless you have a Meka arm, see below):
     cmake ..
     make
 
+You probably want to point CMake to your installation of [gtest][],
+for instance if you have [ROS][] installed do something like this:
+
+[gtest]: http://code.google.com/p/googletest/
+[ROS]: http://ros.org/
+
+    cmake .. -DGTEST_DIR=/opt/ros/cturtle/ros/3rdparty/gtest/gtest
+
 Finally, see if you can run the test:
 
     ./opspace/testTask
@@ -44,6 +52,10 @@ Meka/RTAI sources:
     cd release
     cmake .. -DCMAKE_BUILD_TYPE=Release -DM3_DIR=/home/meka/mekabot/m3
     make
+
+Again, you might want to add
+`-DGTEST_DIR=/opt/ros/cturtle/ros/3rdparty/gtest/gtest` or similar as
+well.
 
 Start the Meka/RTAI controller (you may first need to `su -l` to the
 account under which M3_ROBOT resides due to log file ownership
