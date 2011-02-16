@@ -33,8 +33,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "task_library.hpp"
-#include "TypeIOTGCursor.hpp"
+#include <opspace/task_library.hpp>
+#include <opspace/TypeIOTGCursor.hpp>
 
 using jspace::pretty_print;
 
