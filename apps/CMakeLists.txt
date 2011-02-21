@@ -13,3 +13,6 @@ target_link_libraries (m3_servo jspace_test pthread)
 
 add_executable (m3_tp_test m3_tp_test.cpp)
 target_link_libraries (m3_tp_test opspace jspace_test pthread)
+
+add_executable (m3_jlimit_test m3_jlimit_test.cpp)
+target_link_libraries (m3_jlimit_test opspace jspace_test pthread)
