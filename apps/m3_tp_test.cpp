@@ -61,6 +61,7 @@
 #include <jspace/test/sai_util.hpp>
 #include <opspace/TaskFactory.hpp>
 #include <opspace/Controller.hpp>
+#include <opspace/other_controllers.hpp>
 #include <tao/dynamics/taoDNode.h>
 #include <sstream>
 #include <iostream>
@@ -532,6 +533,9 @@ void parse_options(int argc, char ** argv)
   
   if ("LController" == controller_typename) {
     controller.reset(new LController(controller_typename));
+  } 
+  else if ("LRController" == controller_typename) {
+    controller.reset(new LRController(controller_typename));
   } 
   else if ("SController" == controller_typename) {
     controller.reset(new SController(controller_typename));

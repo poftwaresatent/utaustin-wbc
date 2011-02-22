@@ -61,6 +61,7 @@
 #include <jspace/test/sai_util.hpp>
 #include <opspace/TaskFactory.hpp>
 #include <opspace/Controller.hpp>
+#include <opspace/other_controllers.hpp>
 #include <tao/dynamics/taoDNode.h>
 #include <sstream>
 #include <iostream>
