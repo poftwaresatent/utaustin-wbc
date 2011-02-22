@@ -152,9 +152,7 @@ int64_t GetTimestamp()
 static string controller_errstr;
 static boost::shared_ptr<Model> model;
 static boost::shared_ptr<Controller> controller;
-static Parameter * eegoal_p(0);
 static Parameter * jgoal_p(0);
-static taoDNode * right_hand(0);
 
 ////////////////////////// RTAI PROCESS /////////////////////////////
 
@@ -453,11 +451,6 @@ void parse_options(int argc, char ** argv)
   
   try {
     model.reset(parse_sai_xml_file(model_filename, false));
-    right_hand = model->getNodeByName("right-hand");
-    if ( ! right_hand) {
-      throw runtime_error("no `right-hand' in SAI XML file `"
-			  + model_filename + "'");
-    }
   }
   catch (runtime_error const & ee) {
     errx(EXIT_FAILURE, "EXCEPTION: %s", ee.what());
@@ -574,20 +567,6 @@ int main (int argc, char ** argv)
       printf("tau actual:   ");
       for (unsigned int ii(0); ii < 7; ++ii) {
 	prettyPrint(1e-3 * shm_status.right_arm.torque[ii]);
-      }
-      printf("\n");
-      
-      printf("eegoal:              ");
-      for (unsigned int ii(0); ii < 3; ++ii) {
-	prettyPrint(eegoal_p->getVector()->coeff(ii));
-      }
-      printf("\n");
-      
-      Transform eepos;
-      model->getGlobalFrame(right_hand, eepos);
-      printf("right-hand position: ");
-      for (unsigned int ii(0); ii < 3; ++ii) {
-	prettyPrint(eepos.translation()[ii]);
       }
       printf("\n");
       
