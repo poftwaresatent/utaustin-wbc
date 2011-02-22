@@ -153,6 +153,8 @@ int64_t GetTimestamp()
 static string controller_errstr;
 static boost::shared_ptr<Model> model;
 static boost::shared_ptr<Controller> controller;
+static Task * eetask(0);
+static Task * jlimittask(0);
 static Parameter * eegoal_p(0);
 static Parameter * jgoal_p(0);
 static taoDNode * right_hand(0);
@@ -575,14 +577,16 @@ void parse_options(int argc, char ** argv)
   if (2 > ttab.size()) {
     errx(EXIT_FAILURE, "tasks file `%s' should define at least two tasks",
 	 tasks_filename.c_str());
-  }  
+  }
+  
   for (size_t ii(0); ii < ttab.size(); ++ii) {
     Task * task(ttab[ii]);
-    if (0 == ii) {
+    if ("eepos" == task->getName()) {
+      eetask = task;
       eegoal_p = task->lookupParameter("goal", TASK_PARAM_TYPE_VECTOR);
       if ( ! eegoal_p) {
 	errx(EXIT_FAILURE,
-	     "failed to retrieve `goal' parameter of first task (%s)",
+	     "failed to retrieve `goal' parameter of task (%s)",
 	     task->getName().c_str());
       }
       Parameter * eei_p(task->lookupParameter("end_effector_id",
@@ -599,18 +603,28 @@ void parse_options(int argc, char ** argv)
 	     right_hand->getID());
       }
     }
-    else if (1 == ii) {
+    else if ("posture" == task->getName()) {
       jgoal_p = task->lookupParameter("goal", TASK_PARAM_TYPE_VECTOR);
       if ( ! jgoal_p) {
 	errx(EXIT_FAILURE,
-	     "failed to retrieve `goal' parameter of second task (%s)",
+	     "failed to retrieve `goal' parameter of task (%s)",
 	     task->getName().c_str());
       }
+    }
+    else if ("jlimit" == task->getName()) {
+      jlimittask = task;
     }
     else {
       warnx("unexpected task `%s' in tasks file", task->getName().c_str());
     }
     controller->appendTask(task, true);
+  }
+  
+  if (0 == eegoal_p) {
+    errx(EXIT_FAILURE, "failed to find eepos goal parameter");
+  }
+  if (0 == jgoal_p) {
+    errx(EXIT_FAILURE, "failed to find posture goal parameter");
   }
 }
 
@@ -710,7 +724,12 @@ int main (int argc, char ** argv)
       }
       printf("\n");
       
-      controller->getTaskTable()[0]->task->dbg(cout, "", "");
+      if (jlimittask) {
+	jlimittask->dbg(cout, "--------------------------------------------------", "");
+      }
+      if (eetask) {
+	eetask->dbg(cout, "--------------------------------------------------", "");
+      }
       
       printf("errstr: %s\n", controller_errstr.c_str());
     }
