@@ -1,0 +1,8 @@
+- type: opspace::PostureTask
+  name: posture
+  sigma_threshold: 0.0001
+  dt_seconds: 0.0025
+  kp: [ 100.0, 100.0, 100.0, 100.0,   100.0, 100.0, 100.0 ]
+  kd: [   5.0,   5.0,   5.0,   5.0,    25.0,  25.0,  25.0 ]
+  maxvel: [ 0.2 ]
+  maxacc: [ 0.4 ]

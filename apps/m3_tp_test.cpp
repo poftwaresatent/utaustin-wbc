@@ -367,6 +367,7 @@ static void usage(ostream & os)
      << "   -h             help (this message)\n"
      << "   -f filename    specify robot model (SAI XML file)\n"
      << "   -t filename    specify task definition (YAML file)\n"
+     << "   -T filename    specify FALLBACK task definition (YAML file)\n"
      << "   -c name        controller type name (default LController)\n"
      << "   -e eegoal      end-effector goal [m] (space-separated)\n"
      << "   -j jgoal       posture goal [deg] (space-separated)\n"
@@ -378,6 +379,7 @@ void parse_options(int argc, char ** argv)
 {
   string model_filename("/home/meka/mekabot/wbc-utexas/robospecs/m3_with_hand.xml");
   string tasks_filename("");
+  string fallback_task_filename("");
   string controller_typename("LController");
   static char const * tasks_default =
     "- type: opspace::PositionTask\n"
@@ -430,6 +432,17 @@ void parse_options(int argc, char ** argv)
 	tasks_filename = argv[ii];
 	warnx("tasks_filename: %s", tasks_filename.c_str());
  	break;
+	
+      case 'T':
+ 	++ii;
+ 	if (ii >= argc) {
+ 	  cerr << argv[0] << ": -T requires parameter\n";
+ 	  usage(cerr);
+ 	  exit(EXIT_FAILURE);
+ 	}
+	fallback_task_filename = argv[ii];
+	warnx("fallback_task_filename: %s", fallback_task_filename.c_str());
+ 	break;
 
       case 'c':
  	++ii;
@@ -439,7 +452,7 @@ void parse_options(int argc, char ** argv)
  	  exit(EXIT_FAILURE);
  	}
 	controller_typename = argv[ii];
-	warnx("controller_typename: %s", tasks_filename.c_str());
+	warnx("controller_typename: %s", controller_typename.c_str());
  	break;
 	
       case 'e':
@@ -622,6 +635,21 @@ void parse_options(int argc, char ** argv)
       warnx("unexpected task `%s' in tasks file", task->getName().c_str());
     }
     controller->appendTask(task, true);
+  }
+
+  if ( ! fallback_task_filename.empty()) {
+    TaskFactory tfac2;
+    Status st;  
+    st = tfac2.parseFile(fallback_task_filename);
+    if ( ! st) {
+      errx(EXIT_FAILURE, "failed to parse fallback task file `%s': %s",
+	   fallback_task_filename.c_str(), st.errstr.c_str());
+    }
+    tfac2.dump(cout, "parsed fallback task", "");
+    if (1 != tfac2.getTaskTable().size()) {
+      errx(EXIT_FAILURE, "fallback task file must contain exactly one posture task");
+    }
+    controller->setFallbackTask(tfac2.getTaskTable()[0], true);
   }
   
   if (0 == eegoal_p) {
