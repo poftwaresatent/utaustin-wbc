@@ -103,6 +103,29 @@ else (HAVE_EIGEN2)
   message (FATAL_ERROR "Please install Eigen2, e.g. `sudo apt-get install libeigen2-dev' or from http://eigen.tuxfamily.org/ and pass -DEIGEN2_DIR:path=/path/to/eigen2 to cmake next time you call it.")
 endif (HAVE_EIGEN2)
 
+# find Boost (just for smart pointers though)
+
+if (BOOST_DIR)
+  list (APPEND CMAKE_REQUIRED_INCLUDES
+    ${BOOST_DIR}/include
+    ${BOOST_DIR}
+    ${BOOST_DIR}/include/boost
+    ${BOOST_DIR}/boost
+    )
+  include_directories (
+    ${BOOST_DIR}/include
+    ${BOOST_DIR}
+    ${BOOST_DIR}/include/boost
+    ${BOOST_DIR}/boost
+    )
+endif (BOOST_DIR)
+check_include_file_cxx (boost/shared_ptr.hpp HAVE_BOOST)
+if (HAVE_BOOST)
+  message ("*** found Boost (required)")
+else (HAVE_BOOST)
+  message (FATAL_ERROR "Please install the Boost smart_ptr library, and/or tell me where to find it by passing -DBOOST_DIR:path=/path/to/boost to cmake next time (you probably need to clear its cache first).")
+endif (HAVE_BOOST)
+
 # gtest (optional)
 
 if (GTEST_DIR)
