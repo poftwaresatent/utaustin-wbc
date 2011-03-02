@@ -553,9 +553,6 @@ void parse_options(int argc, char ** argv)
   else if ("SController" == controller_typename) {
     controller.reset(new SController(controller_typename));
   }
-  else if ("TPController" == controller_typename) {
-    controller.reset(new TPController(controller_typename));
-  }
   else {
     errx(EXIT_FAILURE,
 	 "invalid controller type `%s', use one of these:\n"
@@ -597,7 +594,7 @@ void parse_options(int argc, char ** argv)
   }
   
   for (size_t ii(0); ii < ttab.size(); ++ii) {
-    Task * task(ttab[ii]);
+    Task * task(ttab[ii].get());
     if ("eepos" == task->getName()) {
       eetask = task;
       eegoal_p = task->lookupParameter("goal", TASK_PARAM_TYPE_VECTOR);
@@ -634,7 +631,7 @@ void parse_options(int argc, char ** argv)
     else {
       warnx("unexpected task `%s' in tasks file", task->getName().c_str());
     }
-    controller->appendTask(task, true);
+    controller->appendTask(ttab[ii]);
   }
 
   if ( ! fallback_task_filename.empty()) {
@@ -649,7 +646,7 @@ void parse_options(int argc, char ** argv)
     if (1 != tfac2.getTaskTable().size()) {
       errx(EXIT_FAILURE, "fallback task file must contain exactly one posture task");
     }
-    controller->setFallbackTask(tfac2.getTaskTable()[0], true);
+    controller->setFallbackTask(tfac2.getTaskTable()[0]);
   }
   
   if (0 == eegoal_p) {

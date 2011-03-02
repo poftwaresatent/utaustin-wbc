@@ -438,15 +438,11 @@ void parse_options(int argc, char ** argv)
   else if ("SController" == controller_typename) {
     controller.reset(new SController(controller_typename));
   }
-  else if ("TPController" == controller_typename) {
-    controller.reset(new TPController(controller_typename));
-  }
   else {
     errx(EXIT_FAILURE,
 	 "invalid controller type `%s', use one of these:\n"
 	 "  LController\n"
-	 "  SController\n"
-	 "  TPController\n",
+	 "  SController\n",
 	 controller_typename.c_str());
   }
   
@@ -476,16 +472,15 @@ void parse_options(int argc, char ** argv)
 	 tasks_filename.c_str());
   }  
   for (size_t ii(0); ii < ttab.size(); ++ii) {
-    Task * task(ttab[ii]);
     if (1 == ii) {
-      jgoal_p = task->lookupParameter("goal", TASK_PARAM_TYPE_VECTOR);
+      jgoal_p = ttab[ii]->lookupParameter("goal", TASK_PARAM_TYPE_VECTOR);
       if ( ! jgoal_p) {
 	errx(EXIT_FAILURE,
 	     "failed to retrieve `goal' parameter of second task (%s)",
-	     task->getName().c_str());
+	     ttab[ii]->getName().c_str());
       }
     }
-    controller->appendTask(task, true);
+    controller->appendTask(ttab[ii]);
   }
 }
 
@@ -571,7 +566,7 @@ int main (int argc, char ** argv)
       }
       printf("\n");
       
-      controller->getTaskTable()[0]->task->dbg(cout, "", "");
+      controller->getTaskTable()[0]->dbg(cout, "", "");
       
       printf("errstr: %s\n", controller_errstr.c_str());
     }
