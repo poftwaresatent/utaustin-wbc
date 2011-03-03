@@ -10,5 +10,7 @@
   dt_seconds: 0.0025
   kp: [ 0.0 ]
   kd: [ 0.0 ]
+#  kp: [ 50.0 ]
+#  kd: [  5.0 ]
   maxvel: [ 0.2 ]
   maxacc: [ 0.4 ]
