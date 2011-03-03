@@ -601,14 +601,14 @@ void parse_options(int argc, char ** argv)
     Task * task(ttab[ii].get());
     if ("eepos" == task->getName()) {
       eetask = task;
-      eegoal_p = task->lookupParameter("goal", TASK_PARAM_TYPE_VECTOR);
+      eegoal_p = task->lookupParameter("goal", PARAMETER_TYPE_VECTOR);
       if ( ! eegoal_p) {
 	errx(EXIT_FAILURE,
 	     "failed to retrieve `goal' parameter of task (%s)",
 	     task->getName().c_str());
       }
       Parameter * eei_p(task->lookupParameter("end_effector_id",
-					      TASK_PARAM_TYPE_INTEGER));
+					      PARAMETER_TYPE_INTEGER));
       if ( ! eei_p) {
 	errx(EXIT_FAILURE,
 	     "failed to retrieve `end_effector_id' parameter (%s)",
@@ -622,7 +622,7 @@ void parse_options(int argc, char ** argv)
       }
     }
     else if ("posture" == task->getName()) {
-      jgoal_p = task->lookupParameter("goal", TASK_PARAM_TYPE_VECTOR);
+      jgoal_p = task->lookupParameter("goal", PARAMETER_TYPE_VECTOR);
       if ( ! jgoal_p) {
 	errx(EXIT_FAILURE,
 	     "failed to retrieve `goal' parameter of task (%s)",
@@ -635,7 +635,7 @@ void parse_options(int argc, char ** argv)
     else if ("eeori" == task->getName()) {
       oritask = task;
       Parameter * eei_p(task->lookupParameter("end_effector_id",
-					      TASK_PARAM_TYPE_INTEGER));
+					      PARAMETER_TYPE_INTEGER));
       if ( ! eei_p) {
 	errx(EXIT_FAILURE,
 	     "failed to retrieve `end_effector_id' parameter (%s)",

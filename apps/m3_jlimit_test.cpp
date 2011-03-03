@@ -473,7 +473,7 @@ void parse_options(int argc, char ** argv)
   }  
   for (size_t ii(0); ii < ttab.size(); ++ii) {
     if (1 == ii) {
-      jgoal_p = ttab[ii]->lookupParameter("goal", TASK_PARAM_TYPE_VECTOR);
+      jgoal_p = ttab[ii]->lookupParameter("goal", PARAMETER_TYPE_VECTOR);
       if ( ! jgoal_p) {
 	errx(EXIT_FAILURE,
 	     "failed to retrieve `goal' parameter of second task (%s)",
