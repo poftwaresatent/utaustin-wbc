@@ -155,6 +155,7 @@ static string controller_errstr;
 static boost::shared_ptr<Model> model;
 static boost::shared_ptr<Controller> controller;
 static Task * eetask(0);
+static Task * oritask(0);
 static Task * jlimittask(0);
 static Parameter * eegoal_p(0);
 static Parameter * jgoal_p(0);
@@ -242,19 +243,20 @@ static void* rt_system_thread(void * arg)
 	  ok = false;
 	}
 	if (ok) {
-	  
-	  if (0 < goal_switch_delay) {
-	    goal[0] = eegoal;
-	    goal[1] = *eegoal_p->getVector();
-	    next_goal = 1;
-	  }
-	  
-	  status = eegoal_p->set(eegoal);
-	  if ( ! status) {
-	    warnx("ERROR: eegoal setting failed (did you specify one?): %s",
-		  status.errstr.c_str());
-	    controller_errstr = "eegoal: " + status.errstr;
-	    ok = false;
+	  if (eegoal_p) {
+	    if (0 < goal_switch_delay) {
+	      goal[0] = eegoal;
+	      goal[1] = *eegoal_p->getVector();
+	      next_goal = 1;
+	    }
+	    
+	    status = eegoal_p->set(eegoal);
+	    if ( ! status) {
+	      warnx("ERROR: eegoal setting failed (did you specify one?): %s",
+		    status.errstr.c_str());
+	      controller_errstr = "eegoal: " + status.errstr;
+	      ok = false;
+	    }
 	  }
 	}
 	if (ok) {
@@ -283,20 +285,22 @@ static void* rt_system_thread(void * arg)
       }
       
       else if (0 < goal_switch_delay) {
-	struct timeval now;
-	gettimeofday(&now, 0);
-	if (now.tv_sec >= trigger_goal_change) {
-	  trigger_goal_change = now.tv_sec + goal_switch_delay;	
-	  Status const status(eegoal_p->set(goal[next_goal]));
-	  if ( ! status) {
-	    warnx("ERROR: eegoal switch failed: %s",
-		  status.errstr.c_str());
-	    controller_errstr = "eegoal switch: " + status.errstr;
-	    endme(981);
-	    sys_thread_end=1;
-	    break;
+	if (eegoal_p) {
+	  struct timeval now;
+	  gettimeofday(&now, 0);
+	  if (now.tv_sec >= trigger_goal_change) {
+	    trigger_goal_change = now.tv_sec + goal_switch_delay;	
+	    Status const status(eegoal_p->set(goal[next_goal]));
+	    if ( ! status) {
+	      warnx("ERROR: eegoal switch failed: %s",
+		    status.errstr.c_str());
+	      controller_errstr = "eegoal switch: " + status.errstr;
+	      endme(981);
+	      sys_thread_end=1;
+	      break;
+	    }
+	    next_goal = 1 - next_goal;
 	  }
-	  next_goal = 1 - next_goal;
 	}
       }
       
@@ -628,6 +632,22 @@ void parse_options(int argc, char ** argv)
     else if ("jlimit" == task->getName()) {
       jlimittask = task;
     }
+    else if ("eeori" == task->getName()) {
+      oritask = task;
+      Parameter * eei_p(task->lookupParameter("end_effector_id",
+					      TASK_PARAM_TYPE_INTEGER));
+      if ( ! eei_p) {
+	errx(EXIT_FAILURE,
+	     "failed to retrieve `end_effector_id' parameter (%s)",
+	     task->getName().c_str());
+      }
+      st = eei_p->set(right_hand->getID());
+      if ( ! st) {
+	errx(EXIT_FAILURE,
+	     "failed to set end_effector_id to %d",
+	     right_hand->getID());
+      }
+    }
     else {
       warnx("unexpected task `%s' in tasks file", task->getName().c_str());
     }
@@ -650,7 +670,7 @@ void parse_options(int argc, char ** argv)
   }
   
   if (0 == eegoal_p) {
-    errx(EXIT_FAILURE, "failed to find eepos goal parameter");
+    warnx("failed to find eepos goal parameter");
   }
   if (0 == jgoal_p) {
     errx(EXIT_FAILURE, "failed to find posture goal parameter");
@@ -739,11 +759,13 @@ int main (int argc, char ** argv)
       }
       printf("\n");
       
-      printf("eegoal:              ");
-      for (unsigned int ii(0); ii < 3; ++ii) {
-	prettyPrint(eegoal_p->getVector()->coeff(ii));
+      if (eegoal_p) {
+	printf("eegoal:              ");
+	for (unsigned int ii(0); ii < 3; ++ii) {
+	  prettyPrint(eegoal_p->getVector()->coeff(ii));
+	}
+	printf("\n");
       }
-      printf("\n");
       
       Transform eepos;
       model->getGlobalFrame(right_hand, eepos);
@@ -758,6 +780,9 @@ int main (int argc, char ** argv)
       }
       if (eetask) {
 	eetask->dbg(cout, "--------------------------------------------------", "");
+      }
+      if (oritask) {
+	oritask->dbg(cout, "--------------------------------------------------", "");
       }
       
       controller->dbg(cout, "--------------------------------------------------", "");

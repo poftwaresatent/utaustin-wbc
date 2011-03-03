@@ -1,0 +1,14 @@
+- type: opspace::OrientationTask
+  name: eeori
+  sigma_threshold: 0.01
+  kp: 800.0
+  kd: 20.0
+  maxvel: 12.0
+- type: opspace::PostureTask
+  name: posture
+  sigma_threshold: 0.0001
+  dt_seconds: 0.0025
+  kp: [ 0.0 ]
+  kd: [ 0.0 ]
+  maxvel: [ 0.2 ]
+  maxacc: [ 0.4 ]
