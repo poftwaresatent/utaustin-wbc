@@ -69,6 +69,8 @@
 #include <Eigen/LU>
 #include <Eigen/SVD>
 
+#include "DelayHistogram.hpp"
+
 using jspace::State;
 using jspace::convert;
 using jspace::Transform;
@@ -85,6 +87,11 @@ using namespace std;
 #define TORQUE_SHM "TSHMM"
 #define TORQUE_CMD_SEM "TSHMC"
 #define TORQUE_STATUS_SEM "TSHMS"
+
+//////////////////////////////////////////////////
+// quick hack for time measurements
+
+wbcnet::DelayHistogram delay_histogram(2, 10, 0.5 * 1000.0 / 400.0, 1.5  * 1000.0 / 400.0);
 
 //////////////////////////////////////////////////
 // command line arguments
@@ -213,6 +220,10 @@ static void* rt_system_thread(void * arg)
   Vector goal[2];
   size_t next_goal;
   
+  delay_histogram.SetName(0, "step");
+  delay_histogram.SetName(1, "iteration");
+  delay_histogram.StartAll();
+  
   while(!sys_thread_end)
     {
       start_time = nano2count(rt_get_cpu_time_ns());
@@ -337,7 +348,11 @@ static void* rt_system_thread(void * arg)
 	  rt_task_make_periodic(task, end + tick_period,tick_period);			
 	}
       step_cnt++;
+      
+      delay_histogram.Stop(0);
       rt_task_wait_period();
+      delay_histogram.Stop(1);
+      delay_histogram.StartAll();
     }	
   printf("Exiting RealTime Thread...\n");
   rt_make_soft_real_time();
@@ -720,6 +735,9 @@ int main (int argc, char ** argv)
   while (0 == end)
     {		
       usleep(200000);
+      
+      printf("delay histogram\n");
+      delay_histogram.DumpTable(stdout);
       
       printf("\nposture goal: ");
       for (unsigned int ii(0); ii < 7; ++ii) {

@@ -1,0 +1,9 @@
+- type: opspace::HelloGoodbyeBehavior
+  name: hello_goodbye
+  shake:
+#    orientation: eeori_shake
+    position: eepos_shake
+    posture: posture_shake
+  wave:
+    position: eepos_wave
+    posture: posture_wave

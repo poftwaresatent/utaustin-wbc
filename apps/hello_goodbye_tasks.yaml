@@ -1,0 +1,50 @@
+##################################################
+# tasks for the hand-shaking state
+
+#- type: opspace::OrientationTask
+#  name: eeori_shake
+#  end_effector_id: 6
+#  sigma_threshold: 0.01
+#  kp: 800.0
+#  kd: 20.0
+#  maxvel: 12.0
+- type: opspace::PositionTask
+  name: eepos_shake
+  end_effector_id: 6
+  sigma_threshold: 0.01
+  control_point: [ 0.0, 0.0, 0.0 ]
+  dt_seconds: 0.0025
+  kp: [ 25.0 ]
+  kd: [  5.0 ]
+  maxvel: [ 0.2 ]
+  maxacc: [ 0.4 ]
+- type: opspace::PostureTask
+  name: posture_shake
+  sigma_threshold: 0.0001
+  dt_seconds: 0.0025
+  kp: [ 50.0 ]
+  kd: [  5.0 ]
+  maxvel: [ 0.2 ]
+  maxacc: [ 0.4 ]
+
+##################################################
+# tasks for the waving state
+
+- type: opspace::PositionTask
+  name: eepos_wave
+  end_effector_id: 6
+  sigma_threshold: 0.01
+  control_point: [ 0.0, 0.0, 0.0 ]
+  dt_seconds: 0.0025
+  kp: [ 25.0 ]
+  kd: [  5.0 ]
+  maxvel: [ 0.2 ]
+  maxacc: [ 0.4 ]
+- type: opspace::PostureTask
+  name: posture_wave
+  sigma_threshold: 0.0001
+  dt_seconds: 0.0025
+  kp: [ 50.0 ]
+  kd: [  5.0 ]
+  maxvel: [ 0.2 ]
+  maxacc: [ 0.4 ]
