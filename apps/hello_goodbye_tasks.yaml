@@ -14,18 +14,18 @@
   sigma_threshold: 0.01
   control_point: [ 0.0, 0.0, 0.0 ]
   dt_seconds: 0.0025
-  kp: [ 100.0 ]
-  kd: [  5.0 ]
-  maxvel: [ 0.2 ]
-  maxacc: [ 0.4 ]
+  kp: [ 60.0 ]
+  kd: [ 12.0 ]
+  maxvel: [ 0.8 ]
+  maxacc: [ 2.4 ]
 - type: opspace::PostureTask
   name: posture_shake
   sigma_threshold: 0.0001
   dt_seconds: 0.0025
-  kp: [ 50.0 ]
-  kd: [  5.0 ]
-  maxvel: [ 0.2 ]
-  maxacc: [ 0.4 ]
+  kp: [ 150.0 ]
+  kd: [  10.0 ]
+  maxvel: [ 1.0 ]
+  maxacc: [ 6.0 ]
 
 ##################################################
 # tasks for the waving state
@@ -38,13 +38,13 @@
   dt_seconds: 0.0025
   kp: [ 25.0 ]
   kd: [  5.0 ]
-  maxvel: [ 0.2 ]
-  maxacc: [ 0.4 ]
+  maxvel: [ 0.8 ]
+  maxacc: [ 2.4 ]
 - type: opspace::PostureTask
   name: posture_wave
   sigma_threshold: 0.0001
   dt_seconds: 0.0025
-  kp: [ 50.0 ]
-  kd: [  5.0 ]
-  maxvel: [ 0.2 ]
-  maxacc: [ 0.4 ]
+  kp: [ 150.0 ]
+  kd: [  10.0 ]
+  maxvel: [ 1.0 ]
+  maxacc: [ 6.0 ]
