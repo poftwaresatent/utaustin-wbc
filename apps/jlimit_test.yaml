@@ -15,7 +15,11 @@
   sigma_threshold: 0.01
   control_point: [ 0.0, -0.15, 0.0 ]
   dt_seconds: 0.0025
-  kp: [ 150.0, 150.0, 150.0 ]
+  # kp of x must be zero because we lack velocity saturation in the
+  # trajectory task (it's not that easy to do generically properly)
+  # and the robot starts to oscillate if the proportional error
+  # becomes too big.
+  kp: [ 0.0, 150.0, 150.0 ]
   kd: [  20.0 ]
   maxvel: [ 0.1 ]
   maxacc: [ 0.2 ]
