@@ -1,0 +1,5 @@
+- type: opspace::TPBehavior
+  name: blah
+  default:
+    eepos: eepos
+    posture: posture
