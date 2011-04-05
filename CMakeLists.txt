@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.6.2)
+cmake_minimum_required (VERSION 2.6.0)
 if (COMMAND CMAKE_POLICY)
   # CMP0015: link_directories() treats paths relative to the source dir
   if(POLICY CMP0015)
