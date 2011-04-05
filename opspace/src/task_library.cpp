@@ -42,22 +42,34 @@ namespace opspace {
 
 
   PDTask::
-  PDTask(std::string const & name)
+  PDTask(std::string const & name,
+	 saturation_policy_t saturation_policy)
     : Task(name),
+      saturation_policy_(saturation_policy),
       initialized_(false)
   {
     declareParameter("goalpos", &goalpos_);
     declareParameter("goalvel", &goalvel_);
-    declareParameter("kp", &kp_);
-    declareParameter("kd", &kd_);
-    declareParameter("maxvel", &maxvel_);
+    declareParameter("errpos", &errpos_);
+    declareParameter("errvel", &errvel_);
+    declareParameter("kp", &kp_, PARAMETER_FLAG_NOLOG);
+    declareParameter("kd", &kd_, PARAMETER_FLAG_NOLOG);
+    declareParameter("maxvel", &maxvel_, PARAMETER_FLAG_NOLOG);
   }
   
   
   Status PDTask::
   check(Vector const * param, Vector const & value) const
   {
+    if ((param == &errpos_) || (param == &errvel_)) {
+      return Status(false, "error signals are read-only");
+    }
     if ((param == &kp_) || (param == &kd_) || (param == &maxvel_)) {
+      if (SATURATION_NORM == saturation_policy_) {
+	if (1 != value.rows()) {
+	  return Status(false, "SATURATION_NORM requires one-dimensional gains and limits");
+	}
+      }
       for (size_t ii(0); ii < value.rows(); ++ii) {
 	if (0 > value[ii]) {
 	  return Status(false, "gains and limits must be >= 0");
@@ -65,8 +77,14 @@ namespace opspace {
       }
     }
     if (initialized_) {
-      if ((param == &kp_) || (param == &kd_) || (param == &maxvel_)
-	  || (param == &goalpos_) || (param == &goalvel_)) {
+      if (SATURATION_NORM != saturation_policy_) {
+	if ((param == &kp_) || (param == &kd_) || (param == &maxvel_)) {
+	  if (goalpos_.rows() != value.rows()) {
+	    return Status(false, "invalid dimension");
+	  }
+	}
+      }
+      if ((param == &goalpos_) || (param == &goalvel_)) {
 	if (goalpos_.rows() != value.rows()) {
 	  return Status(false, "invalid dimension");
 	}
@@ -77,37 +95,52 @@ namespace opspace {
   
   
   Status PDTask::
-  initPDTask(Vector const & initpos,
-	     bool allow_scalar_to_vector)
+  initPDTask(Vector const & initpos)
   {
     int const ndim(initpos.rows());
-    if (ndim != kp_.rows()) {
-      if ((ndim != 1) && (1 == kp_.rows()) && allow_scalar_to_vector) {
-	kp_ = kp_[0] * Vector::Ones(ndim);
+    
+    if (SATURATION_NORM == saturation_policy_) {
+      if (1 != kp_.rows()) {
+	return Status(false, "kp must be one-dimensional for SATURATION_NORM policy");
       }
-      else {
-	return Status(false, "you did not (correctly) set kp");
+      if (1 != kd_.rows()) {
+	return Status(false, "kd must be one-dimensional for SATURATION_NORM policy");
       }
-    }
-    if (ndim != kd_.rows()) {
-      if ((ndim != 1) && (1 == kd_.rows()) && allow_scalar_to_vector) {
-	kd_ = kd_[0] * Vector::Ones(ndim);
-      }
-      else {
-	return Status(false, "you did not (correctly) set kd");
+      if (1 != maxvel_.rows()) {
+	return Status(false, "maxvel must be one-dimensional for SATURATION_NORM policy");
       }
     }
-    if (ndim != maxvel_.rows()) {
-      if ((ndim != 1) && (1 == maxvel_.rows()) && allow_scalar_to_vector) {
-	maxvel_ = maxvel_[0] * Vector::Ones(ndim);
+    else {
+      if (ndim != kp_.rows()) {
+	if ((ndim != 1) && (1 == kp_.rows())) {
+	  kp_ = kp_[0] * Vector::Ones(ndim);
+	}
+	else {
+	  return Status(false, "invalid kp dimension");
+	}
       }
-      else {
-	return Status(false, "you did not (correctly) set maxvel");
+      if (ndim != kd_.rows()) {
+	if ((ndim != 1) && (1 == kd_.rows())) {
+	  kd_ = kd_[0] * Vector::Ones(ndim);
+	}
+	else {
+	  return Status(false, "invalid kd dimension");
+	}
+      }
+      if (ndim != maxvel_.rows()) {
+	if ((ndim != 1) && (1 == maxvel_.rows())) {
+	  maxvel_ = maxvel_[0] * Vector::Ones(ndim);
+	}
+	else {
+	  return Status(false, "invalid maxvel dimension");
+	}
       }
     }
     
     goalpos_ = initpos;
     goalvel_ = Vector::Zero(ndim);
+    errpos_ = Vector::Zero(ndim);
+    errvel_ = Vector::Zero(ndim);
     initialized_ = true;
     
     Status ok;
@@ -118,45 +151,365 @@ namespace opspace {
   Status PDTask::
   computePDCommand(Vector const & curpos,
 		   Vector const & curvel,
-		   bool component_wise_saturation,
 		   Vector & command)
   {
     Status st;
     if ( ! initialized_) {
       st.ok = false;
       st.errstr = "not initialized";
+      return st;
     }
-    else {
-      command = kp_.cwise() * (goalpos_ - curpos);
-      if (component_wise_saturation) {
-	for (int ii(0); ii < command.rows(); ++ii) {
-	  // beware of div by zero
-	  if ((maxvel_[ii] > 1e-4) && (kd_[ii] > 1e-4)) {
-	    double const sat(fabs((command[ii] / maxvel_[ii]) / kd_[ii]));
-	    if (sat > 1.0) {
-	      command[ii] /= sat;
-	    }
+    
+    errpos_ = goalpos_ - curpos;
+    errvel_ = goalvel_ - curvel;
+    
+    if (SATURATION_NORM == saturation_policy_) {
+      command = kp_[0] * errpos_;
+      if ((maxvel_[0] > 1e-4) && (kd_[0] > 1e-4)) { // beware of div by zero
+	double const sat(command.norm() / maxvel_[0] / kd_[0]);
+	if (sat > 1.0) {
+	  command /= sat;
+	}
+      }
+      command += kd_[0] * errvel_;
+      return st;
+    }    
+    
+    command = kp_.cwise() * errpos_;
+    
+    if (SATURATION_COMPONENT_WISE == saturation_policy_) {
+      for (int ii(0); ii < command.rows(); ++ii) {
+	if ((maxvel_[ii] > 1e-4) && (kd_[ii] > 1e-4)) { // beware of div by zero
+	  double const sat(fabs((command[ii] / maxvel_[ii]) / kd_[ii]));
+	  if (sat > 1.0) {
+	    command[ii] /= sat;
 	  }
 	}
+      }
+    }
+    
+    else if (SATURATION_MAX_COMPONENT == saturation_policy_) {
+      double saturation(0.0);
+      for (int ii(0); ii < command.rows(); ++ii) {
+	if ((maxvel_[ii] > 1e-4) && (kd_[ii] > 1e-4)) { // beware of div by zero
+	  double const sat(fabs((command[ii] / maxvel_[ii]) / kd_[ii]));
+	  if (sat > saturation) {
+	    saturation = sat;
+	  }
+	}
+      }
+      if (saturation > 1.0) {
+	command /= saturation;
+      }
+    }
+    
+    // else (...) : other saturation policies would go here. For now
+    // we silently assume that any other value of saturation_policy
+    // means SATURATION_OFF.
+    
+    command += kd_.cwise() * errvel_;
+    
+    return st;
+  }
+  
+  
+  DraftPIDTask::
+  DraftPIDTask(std::string const & name)
+    : PDTask(name, PDTask::SATURATION_COMPONENT_WISE),
+      dt_seconds_(-1)
+  {
+    declareParameter("dt_seconds", &dt_seconds_, PARAMETER_FLAG_NOLOG);
+    declareParameter("ki", &ki_, PARAMETER_FLAG_NOLOG);
+    declareParameter("errsum", &errsum_);
+    declareParameter("limitpos", &limitpos_, PARAMETER_FLAG_NOLOG);
+    declareParameter("limitvel", &limitvel_, PARAMETER_FLAG_NOLOG);
+    declareParameter("triggerpos", &triggerpos_);
+  }
+  
+  
+  Status DraftPIDTask::
+  check(double const * param, double value) const
+  {
+    if (param == &dt_seconds_) {
+      if (0 >= value) {
+	return Status(false, "dt_seconds must be > 0");
+      }
+    }
+    return Status();
+  }
+  
+  
+  Status DraftPIDTask::
+  check(Vector const * param, Vector const & value) const
+  {
+    if (param == &triggerpos_) {
+      return Status(false, "triggerpos is read-only");
+    }
+    if (param == &errsum_) {
+      return Status(false, "errsum is read-only");
+    }
+    if ((param == &ki_) || (param == &limitpos_) || (param == &limitvel_)) {
+      for (size_t ii(0); ii < value.rows(); ++ii) {
+	if (0 > value[ii]) {
+	  return Status(false, "gains and limits must be >= 0");
+	}
+      }
+      if (initialized_) {
+	if (goalpos_.rows() != value.rows()) {
+	  return Status(false, "invalid dimension");
+	}
+      }
+    }
+    return Status();
+  }
+  
+  
+  Status DraftPIDTask::
+  initDraftPIDTask(Vector const & initpos)
+  {
+    Status st(initPDTask(initpos));
+    if ( ! st) {
+      return st;
+    }
+    
+    if (0 >= dt_seconds_) {
+      return Status(false, "dt_seconds_ must be > 0");
+    }
+    for (size_t ii(0); ii < ki_.rows(); ++ii) {
+      if (0 > ki_[ii]) {
+	return Status(false, "ki must be >= 0");
+      }
+    }
+    for (size_t ii(0); ii < limitpos_.rows(); ++ii) {
+      if (0 > limitpos_[ii]) {
+	return Status(false, "limitpos must be >= 0");
+      }
+    }
+    for (size_t ii(0); ii < limitvel_.rows(); ++ii) {
+      if (0 > limitvel_[ii]) {
+	return Status(false, "limitvel must be >= 0");
+      }
+    }
+    
+    int const ndim(initpos.rows());
+    if (ndim != ki_.rows()) {
+      if ((ndim != 1) && (1 == ki_.rows())) {
+	ki_ = ki_[0] * Vector::Ones(ndim);
       }
       else {
-	double saturation(0.0);
-	for (int ii(0); ii < command.rows(); ++ii) {
-	  // beware of div by zero
-	  if ((maxvel_[ii] > 1e-4) && (kd_[ii] > 1e-4)) {
-	    double const sat(fabs((command[ii] / maxvel_[ii]) / kd_[ii]));
-	    if (sat > saturation) {
-	      saturation = sat;
-	    }
-	  }
+	return Status(false, "invalid ki dimension");
+      }
+    }
+    if (ndim != limitpos_.rows()) {
+      if ((ndim != 1) && (1 == limitpos_.rows())) {
+	limitpos_ = limitpos_[0] * Vector::Ones(ndim);
+      }
+      else {
+	return Status(false, "invalid limitpos dimension");
+      }
+    }
+    if (ndim != limitvel_.rows()) {
+      if ((ndim != 1) && (1 == limitvel_.rows())) {
+	limitvel_ = limitvel_[0] * Vector::Ones(ndim);
+      }
+      else {
+	return Status(false, "invalid limitvel dimension");
+      }
+    }
+    
+    errsum_ = Vector::Zero(ndim);
+    triggerpos_ = - 1.0 * Vector::Ones(ndim);
+    
+    return st;
+  }
+  
+  
+  Status DraftPIDTask::
+  computeDraftPIDCommand(Vector const & curpos,
+			 Vector const & curvel,
+			 Vector & command)
+  {
+    Status st(computePDCommand(curpos, curvel, command));
+    if ( ! st) {
+      return st;
+    }
+    
+    // update "state" for each DOF: if triggerpos_[ii] is positive
+    // after this loop, it means we should enable the integral term
+    // for it further down.
+    for (int ii(0); ii < triggerpos_.rows(); ++ii) {
+      if (triggerpos_[ii] > 0) {
+	// integral term currently ON
+	if (fabs(errpos_[ii]) > triggerpos_[ii]) {
+	  // overshoot: switch off integration
+	  triggerpos_[ii] = -1;
 	}
-	if (saturation > 1.0) {
-	  command /= saturation;
+	else if (fabs(errvel_[ii]) > 2.0 * limitvel_[ii]) {
+	  // too fast: switch off integration
+	  triggerpos_[ii] = -1;
+	}
+	// else it remains on
+      }
+      else {
+	// integral term currently OFF
+	if ((fabs(errpos_[ii]) < limitpos_[ii])
+	    && (fabs(errvel_[ii]) < limitvel_[ii])) {
+	  // close to the goal: switch on integration
+	  triggerpos_[ii] = 2.0 * fabs(errpos_[ii]);
+	  errsum_[ii] = 0;
 	}
       }
-      command += kd_.cwise() * (goalvel_ - curvel);
     }
+    
+    // for each DOF with integral term enabled, add it to the command
+    for (int ii(0); ii < triggerpos_.rows(); ++ii) {
+      if (triggerpos_[ii] > 0) {
+	errsum_[ii] += errpos_[ii] * dt_seconds_;
+	command[ii] += ki_[ii] * errsum_[ii];
+      }
+    }
+    
     return st;
+  }
+  
+  
+  Status DraftPIDTask::
+  init(Model const & model)
+  {
+    jacobian_ = Matrix::Identity(model.getNDOF(), model.getNDOF());
+    actual_ = model.getState().position_;
+    return initDraftPIDTask(model.getState().position_);
+  }
+  
+  
+  Status DraftPIDTask::
+  update(Model const & model)
+  {
+    actual_ = model.getState().position_;
+    return computeDraftPIDCommand(actual_,
+				  model.getState().velocity_,
+				  command_);
+  }
+  
+  
+  void DraftPIDTask::
+  dbg(std::ostream & os,
+      std::string const & title,
+      std::string const & prefix) const
+  {
+    if ( ! title.empty()) {
+      os << title << "\n";
+    }
+    os << prefix << "draft PID task: `" << instance_name_ << "'\n";
+    pretty_print(errpos_, os, prefix + "  errpos", prefix + "    ");
+    pretty_print(triggerpos_, os, prefix + "  triggerpos", prefix + "    ");
+    pretty_print(ki_, os, prefix + "  ki", prefix + "    ");
+    pretty_print(errsum_, os, prefix + "  errsum", prefix + "    ");
+  }
+
+  
+  
+  CartPosTask::
+  CartPosTask(std::string const & name)
+    : PDTask(name, PDTask::SATURATION_NORM),
+      end_effector_name_(""),
+      control_point_(Vector::Zero(3))
+  {
+    declareParameter("end_effector", &end_effector_name_, PARAMETER_FLAG_NOLOG);
+    declareParameter("control_point", &control_point_, PARAMETER_FLAG_NOLOG);
+  }
+  
+  
+  Status CartPosTask::
+  init(Model const & model)
+  {
+    if (end_effector_name_.empty()) {
+      return Status(false, "no end_effector");
+    }
+    if (3 != control_point_.rows()) {
+      return Status(false, "control_point must have 3 dimensions");
+    }
+    end_effector_node_ = updateActual(model);
+    if ( ! end_effector_node_) {
+      return Status(false, "invalid end_effector");
+    }
+    return initPDTask(actual_);
+  }
+  
+  
+  Status CartPosTask::
+  update(Model const & model)
+  {
+    end_effector_node_ = updateActual(model);
+    if ( ! end_effector_node_) {
+      return Status(false, "invalid end_effector");
+    }
+    
+    Matrix Jfull;
+    if ( ! model.computeJacobian(end_effector_node_, actual_[0], actual_[1], actual_[2], Jfull)) {
+      return Status(false, "failed to compute Jacobian (unsupported joint type?)");
+    }
+    jacobian_ = Jfull.block(0, 0, 3, Jfull.cols());
+    
+    return computePDCommand(actual_,
+			    jacobian_ * model.getState().velocity_,
+			    command_);
+  }
+  
+  
+  Status CartPosTask::
+  check(std::string const * param, std::string const & value) const
+  {
+    if (param == &end_effector_name_) {
+      end_effector_node_ = 0; // lazy re-init... would be nice to detect errors here though, but need model
+    }
+    Status ok;
+    return ok;
+  }
+  
+  
+  taoDNode const * CartPosTask::
+  updateActual(Model const & model)
+  {
+    if ( ! end_effector_node_) {
+      end_effector_node_ = model.getNodeByName(end_effector_name_);
+    }
+    if (end_effector_node_) {
+      jspace::Transform ee_transform;
+      model.computeGlobalFrame(end_effector_node_,
+			       control_point_[0],
+			       control_point_[1],
+			       control_point_[2],
+			       ee_transform);
+      actual_ = ee_transform.translation();
+    }
+    return end_effector_node_;
+  }
+  
+  
+  JPosTask::
+  JPosTask(std::string const & name)
+    : PDTask(name, PDTask::SATURATION_COMPONENT_WISE)
+  {
+  }
+  
+  
+  Status JPosTask::
+  init(Model const & model)
+  {
+    jacobian_ = Matrix::Identity(model.getNDOF(), model.getNDOF());
+    actual_ = model.getState().position_;
+    return initPDTask(model.getState().position_);
+  }
+  
+  
+  Status JPosTask::
+  update(Model const & model)
+  {
+    actual_ = model.getState().position_;
+    return computePDCommand(actual_,
+			    model.getState().velocity_,
+			    command_);
   }
   
   
@@ -167,9 +520,9 @@ namespace opspace {
       kd_(20.0),
       initialized_(false)
   {
-    declareParameter("selection", &selection_);
-    declareParameter("kp", &kp_);
-    declareParameter("kd", &kd_);
+    declareParameter("selection", &selection_, PARAMETER_FLAG_NOLOG);
+    declareParameter("kp", &kp_, PARAMETER_FLAG_NOLOG);
+    declareParameter("kd", &kd_, PARAMETER_FLAG_NOLOG);
   }
   
   
@@ -204,7 +557,8 @@ namespace opspace {
   
   
   Status SelectedJointPostureTask::
-  update(Model const & model) { 
+  update(Model const & model)
+  {
     Status st;
     if ( ! initialized_) {
       st.ok = false;
@@ -246,18 +600,14 @@ namespace opspace {
   
   
   TrajectoryTask::
-  TrajectoryTask(std::string const & name)
-    : Task(name),
+  TrajectoryTask(std::string const & name, saturation_policy_t saturation_policy)
+    : PDTask(name, saturation_policy),
       cursor_(0),
-      dt_seconds_(-1),
-      goal_changed_(false)
+      dt_seconds_(-1)
   {
-    declareParameter("dt_seconds", &dt_seconds_);
-    declareParameter("goal", &goal_);
-    declareParameter("kp", &kp_);
-    declareParameter("kd", &kd_);
-    declareParameter("maxvel", &maxvel_);
-    declareParameter("maxacc", &maxacc_);
+    declareParameter("dt_seconds", &dt_seconds_, PARAMETER_FLAG_NOLOG);
+    declareParameter("trjgoal", &trjgoal_);
+    declareParameter("maxacc", &maxacc_, PARAMETER_FLAG_NOLOG);
   }
   
   
@@ -269,43 +619,26 @@ namespace opspace {
   
   
   Status TrajectoryTask::
-  initTrajectoryTask(Vector const & initpos, bool allow_scalar_to_vector)
+  initTrajectoryTask(Vector const & initpos)
   {
+    Status st(initPDTask(initpos));
+    if ( ! st) {
+      return st;
+    }
+    
     if (0 > dt_seconds_) {
-      return Status(false, "you did not (correctly) set dt_seconds");
+      st.ok = false;
+      st.errstr = "you did not (correctly) set dt_seconds";
+      return st;
     }
     
     int const ndim(initpos.rows());
-    if (ndim != maxvel_.rows()) {
-      if ((ndim != 1) && (1 == maxvel_.rows()) && allow_scalar_to_vector) {
-	maxvel_ = maxvel_[0] * Vector::Ones(ndim);
-      }
-      else {
-	return Status(false, "you did not (correctly) set maxvel");
-      }
-    }
     if (ndim != maxacc_.rows()) {
-      if ((ndim != 1) && (1 == maxacc_.rows()) && allow_scalar_to_vector) {
+      if ((ndim != 1) && (1 == maxacc_.rows())) {
 	maxacc_ = maxacc_[0] * Vector::Ones(ndim);
       }
       else {
-	return Status(false, "you did not (correctly) set maxacc");
-      }
-    }
-    if (ndim != kp_.rows()) {
-      if ((ndim != 1) && (1 == kp_.rows()) && allow_scalar_to_vector) {
-	kp_ = kp_[0] * Vector::Ones(ndim);
-      }
-      else {
-	return Status(false, "you did not (correctly) set kp");
-      }
-    }
-    if (ndim != kd_.rows()) {
-      if ((ndim != 1) && (1 == kd_.rows()) && allow_scalar_to_vector) {
-	kd_ = kd_[0] * Vector::Ones(ndim);
-      }
-      else {
-	return Status(false, "you did not (correctly) set kd");
+	return Status(false, "invalid maxacc dimension");
       }
     }
     
@@ -319,10 +652,18 @@ namespace opspace {
       cursor_ = new TypeIOTGCursor(ndim, dt_seconds_);
     }
     
-    goal_ = initpos;
-    goal_changed_ = true;
+    trjgoal_ = initpos;
+    cursor_->position() = initpos;
+    cursor_->velocity() = Vector::Zero(ndim);
     
-    return Status();
+    if (SATURATION_NORM == saturation_policy_) {
+      qh_maxvel_ = maxvel_[0] * Vector::Ones(ndim);
+    }
+    else {
+      qh_maxvel_ = maxvel_;
+    }
+    
+    return st;
   }
   
   
@@ -335,22 +676,18 @@ namespace opspace {
       return Status(false, "not initialized");
     }
     
-    if (goal_changed_) {
-      cursor_->position() = curpos;
-      cursor_->velocity() = curvel;
-      goal_changed_ = false;
+    int const trjstatus(cursor_->next(qh_maxvel_, maxacc_, trjgoal_));
+    if (0 > trjstatus) {
+      std::ostringstream msg;
+      msg << "trajectory generation error code "
+	  << trjstatus << ": " << otg_errstr(trjstatus);
+      return Status(false, msg.str());
     }
     
-    if (0 > cursor_->next(maxvel_, maxacc_, goal_)) {
-      return Status(false, "trajectory generation error");
-    }
+    goalpos_ = cursor_->position();
+    goalvel_ = cursor_->velocity();
     
-    command
-      = kp_.cwise() * (cursor_->position() - curpos)
-      + kd_.cwise() * (cursor_->velocity() - curvel);
-    
-    Status ok;
-    return ok;
+    return computePDCommand(curpos, curvel, command);
   }
   
   
@@ -360,33 +697,49 @@ namespace opspace {
     if ((param == &dt_seconds_) && (0 >= value)) {
       return Status(false, "dt_seconds must be > 0");
     }
-    return Status();
+    return Status(); // if we had one in the superclass, we'd call PDTask::check(param, value);
   }
   
   
   Status TrajectoryTask::
   check(Vector const * param, Vector const & value) const
   {
-    if (cursor_) {
-      if (param == &goal_) {
-	if (cursor_->ndof_ != value.rows()) {
-	  return Status(false, "invalid goal dimension");
-	}
-	goal_changed_ = true;
+    Status st(PDTask::check(param, value));
+    if ( ! st) {
+      return st;
+    }
+    
+    if ( ! cursor_) {
+      return st;
+    }
+    
+    if (param == &trjgoal_) {
+      if (cursor_->ndof_ != value.rows()) {
+	return Status(false, "invalid goal dimension");
       }
-      if ((param == &kp_) || (param == &kd_)
-	  || (param == &maxvel_) || (param == &maxacc_)) {
-	if (cursor_->ndof_ != value.rows()) {
-	  return Status(false, "invalid dimension");
-	}
-	for (size_t ii(0); ii < cursor_->ndof_; ++ii) {
-	  if (0 > value[ii]) {
-	    return Status(false, "bounds and gains must be >= 0");
-	  }
+    }
+    
+    if (param == &maxacc_) {
+      if (cursor_->ndof_ != value.rows()) {
+	return Status(false, "invalid maxacc dimension");
+      }
+      for (size_t ii(0); ii < value.rows(); ++ii) {
+	if (0 > value[ii]) {
+	  return Status(false, "maxacc must be >= 0");
 	}
       }
     }
-    return Status();
+    
+    if (param == &maxvel_) {
+      if (SATURATION_NORM == saturation_policy_) {
+	qh_maxvel_ = value[0] * Vector::Ones(cursor_->ndof_);
+      }
+      else {
+	qh_maxvel_ = value;
+      }
+    }
+    
+    return st;
   }
   
   
@@ -398,28 +751,30 @@ namespace opspace {
     if ( ! title.empty()) {
       os << title << "\n";
     }
-    os << prefix << "trajectory task: `" << name_ << "'\n";
+    os << prefix << "trajectory task: `" << instance_name_ << "'\n";
     if ( ! cursor_) {
       os << prefix << "  NOT INITIALIZED\n";
     }
-    pretty_print(actual_, os, "actual", prefix + "  ");
-    pretty_print(cursor_->position(), os, "carrot", prefix + "  ");
-    pretty_print(goal_, os, "goal", prefix + "  ");
+    else {
+      pretty_print(actual_, os, prefix + "  actual", prefix + "    ");
+      pretty_print(cursor_->position(), os, prefix + "  carrot", prefix + "    ");
+      pretty_print(trjgoal_, os, prefix + "  trjgoal", prefix + "    ");
+    }
   }
   
   
-  PositionTask::
-  PositionTask(std::string const & name)
-    : TrajectoryTask(name),
+  CartPosTrjTask::
+  CartPosTrjTask(std::string const & name)
+    : TrajectoryTask(name, PDTask::SATURATION_NORM),
       end_effector_id_(-1),
       control_point_(Vector::Zero(3))
   {
-    declareParameter("end_effector_id", &end_effector_id_);
-    declareParameter("control_point", &control_point_);
+    declareParameter("end_effector_id", &end_effector_id_, PARAMETER_FLAG_NOLOG);
+    declareParameter("control_point", &control_point_, PARAMETER_FLAG_NOLOG);
   }
   
   
-  Status PositionTask::
+  Status CartPosTrjTask::
   init(Model const & model)
   {
     if (0 > end_effector_id_) {
@@ -431,11 +786,11 @@ namespace opspace {
     if (0 == updateActual(model)) {
       return Status(false, "updateActual() failed, did you specify a valid end_effector_id?");
     }
-    return initTrajectoryTask(actual_, true);
+    return initTrajectoryTask(actual_);
   }
   
   
-  Status PositionTask::
+  Status CartPosTrjTask::
   update(Model const & model)
   {
     taoDNode const * ee_node(updateActual(model));
@@ -455,7 +810,7 @@ namespace opspace {
   }
   
   
-  taoDNode const * PositionTask::
+  taoDNode const * CartPosTrjTask::
   updateActual(Model const & model)
   {
     taoDNode * ee_node(model.getNode(end_effector_id_));
@@ -472,23 +827,23 @@ namespace opspace {
   }
   
   
-  PostureTask::
-  PostureTask(std::string const & name)
-    : TrajectoryTask(name)
+  JPosTrjTask::
+  JPosTrjTask(std::string const & name)
+    : TrajectoryTask(name, PDTask::SATURATION_COMPONENT_WISE)
   {
   }
   
   
-  Status PostureTask::
+  Status JPosTrjTask::
   init(Model const & model)
   {
     jacobian_ = Matrix::Identity(model.getNDOF(), model.getNDOF());
     actual_ = model.getState().position_;
-    return initTrajectoryTask(model.getState().position_, true);
+    return initTrajectoryTask(model.getState().position_);
   }
   
   
-  Status PostureTask::
+  Status JPosTrjTask::
   update(Model const & model)
   {
     actual_ = model.getState().position_;
@@ -496,9 +851,10 @@ namespace opspace {
   }
   
   
-  void PostureTask::
-  quickSetup(double kp, double kd, double maxvel, double maxacc)
+  void JPosTrjTask::
+  quickSetup(double dt_seconds, double kp, double kd, double maxvel, double maxacc)
   {
+    dt_seconds_ = dt_seconds;
     kp_ = kp * Vector::Ones(1);
     kd_ = kd * Vector::Ones(1);
     maxvel_ = maxvel * Vector::Ones(1);
@@ -511,15 +867,15 @@ namespace opspace {
     : Task(name),
       dt_seconds_(-1)
   {
-    declareParameter("dt_seconds", &dt_seconds_);
-    declareParameter("upper_stop_deg", &upper_stop_deg_);
-    declareParameter("upper_trigger_deg", &upper_trigger_deg_);
-    declareParameter("lower_stop_deg", &lower_stop_deg_);
-    declareParameter("lower_trigger_deg", &lower_trigger_deg_);
-    declareParameter("kp", &kp_);
-    declareParameter("kd", &kd_);
-    declareParameter("maxvel", &maxvel_);
-    declareParameter("maxacc", &maxacc_);
+    declareParameter("dt_seconds", &dt_seconds_, PARAMETER_FLAG_NOLOG);
+    declareParameter("upper_stop_deg", &upper_stop_deg_, PARAMETER_FLAG_NOLOG);
+    declareParameter("upper_trigger_deg", &upper_trigger_deg_, PARAMETER_FLAG_NOLOG);
+    declareParameter("lower_stop_deg", &lower_stop_deg_, PARAMETER_FLAG_NOLOG);
+    declareParameter("lower_trigger_deg", &lower_trigger_deg_, PARAMETER_FLAG_NOLOG);
+    declareParameter("kp", &kp_, PARAMETER_FLAG_NOLOG);
+    declareParameter("kd", &kd_, PARAMETER_FLAG_NOLOG);
+    declareParameter("maxvel", &maxvel_, PARAMETER_FLAG_NOLOG);
+    declareParameter("maxacc", &maxacc_, PARAMETER_FLAG_NOLOG);
   }
   
   
@@ -709,13 +1065,13 @@ namespace opspace {
     if ( ! title.empty()) {
       os << title << "\n";
     }
-    os << prefix << "joint limit task: `" << name_ << "'\n";
+    os << prefix << "joint limit task: `" << instance_name_ << "'\n";
     if (cursor_.empty()) {
       os << prefix << "  NOT INITIALIZED\n";
     }
-    pretty_print(actual_, os, "actual", prefix + "  ");
-    pretty_print(goal_, os, "goal", prefix + "  ");
-    pretty_print(jacobian_, os, "jacobian", prefix + "  ");
+    pretty_print(actual_, os, prefix + "  actual", prefix + "    ");
+    pretty_print(goal_, os, prefix + "  goal", prefix + "    ");
+    pretty_print(jacobian_, os, prefix + "  jacobian", prefix + "    ");
   }
 
 
@@ -727,10 +1083,11 @@ namespace opspace {
       kd_(5),
       maxvel_(0.5)
   {
-    declareParameter("end_effector_id", &end_effector_id_);
-    declareParameter("kp", &kp_);
-    declareParameter("kd", &kd_);
-    declareParameter("maxvel", &maxvel_);
+    declareParameter("end_effector_id", &end_effector_id_, PARAMETER_FLAG_NOLOG);
+    declareParameter("kp", &kp_, PARAMETER_FLAG_NOLOG);
+    declareParameter("kd", &kd_, PARAMETER_FLAG_NOLOG);
+    declareParameter("maxvel", &maxvel_, PARAMETER_FLAG_NOLOG);
+    declareParameter("eepos", &eepos_);
   }
   
   
@@ -762,10 +1119,11 @@ namespace opspace {
     jspace::Transform ee_transform;
     model.computeGlobalFrame(ee_node, Vector::Zero(3), ee_transform);
     Matrix Jfull;
+    eepos_ = ee_transform.translation();
     if ( ! model.computeJacobian(ee_node,
-				 ee_transform.translation()[0],
-				 ee_transform.translation()[1],
-				 ee_transform.translation()[2],
+				 eepos_[0],
+				 eepos_[1],
+				 eepos_[2],
 				 Jfull)) {
       return 0;
     }
@@ -777,9 +1135,9 @@ namespace opspace {
     actual_z_ = ee_transform.linear().block(0, 2, 3, 1);
 
     actual_.resize(9);
-    actual_.block(0, 0, 3, 1) = goal_x_;
-    actual_.block(3, 0, 3, 1) = goal_y_;
-    actual_.block(6, 0, 3, 1) = goal_z_;
+    actual_.block(0, 0, 3, 1) = actual_x_;
+    actual_.block(3, 0, 3, 1) = actual_y_;
+    actual_.block(6, 0, 3, 1) = actual_z_;
     
     velocity_ = jacobian_ * model.getState().velocity_;
     
@@ -819,21 +1177,21 @@ namespace opspace {
     if ( ! title.empty()) {
       os << title << "\n";
     }
-    os << prefix << "orientation task: `" << name_ << "'\n";
-    pretty_print(velocity_, os, "velocity", prefix + "  ");
-    pretty_print(goal_x_, os, "goal_x", prefix + "  ");
-    pretty_print(goal_y_, os, "goal_y", prefix + "  ");
-    pretty_print(goal_z_, os, "goal_z", prefix + "  ");
+    os << prefix << "orientation task: `" << instance_name_ << "'\n";
+    pretty_print(velocity_, os, prefix + "  velocity", prefix + "    ");
+    pretty_print(goal_x_, os, prefix + "  goal_x", prefix + "    ");
+    pretty_print(goal_y_, os, prefix + "  goal_y", prefix + "    ");
+    pretty_print(goal_z_, os, prefix + "  goal_z", prefix + "    ");
     Vector foo(3);
     foo << goal_x_.norm(), goal_y_.norm(), goal_z_.norm();
-    pretty_print(foo, os, "length of goal unit vectors", prefix + "  ");
-    pretty_print(actual_x_, os, "actual_x", prefix + "  ");
-    pretty_print(actual_y_, os, "actual_y", prefix + "  ");
-    pretty_print(actual_z_, os, "actual_z", prefix + "  ");
+    pretty_print(foo, os, prefix + "  length of goal unit vectors", prefix + "    ");
+    pretty_print(actual_x_, os, prefix + "  actual_x", prefix + "    ");
+    pretty_print(actual_y_, os, prefix + "  actual_y", prefix + "    ");
+    pretty_print(actual_z_, os, prefix + "  actual_z", prefix + "    ");
     foo << actual_x_.norm(), actual_y_.norm(), actual_z_.norm();
-    pretty_print(foo, os, "length of actual unit vectors", prefix + "  ");
-    pretty_print(delta_, os, "delta", prefix + "  ");
-    pretty_print(command_, os, "command", prefix + "  ");
+    pretty_print(foo, os, prefix + "  length of actual unit vectors", prefix + "    ");
+    pretty_print(delta_, os, prefix + "  delta", prefix + "    ");
+    pretty_print(command_, os, prefix + "  command", prefix + "    ");
   }
 
 }

@@ -73,43 +73,147 @@ namespace opspace {
     virtual Status check(Vector const * param, Vector const & value) const;
     
   protected:
-    explicit PDTask(std::string const & name);
+    /**
+       Velocity saturation policy.
+       - SATURATION_OFF: do not saturate commands (use with caution)
+       - SATURATION_COMPONENT_WISE: each component of the
+         position-error is scaled according to an individual
+         saturation term
+       - SATURATION_MAX_COMPONENT: similar to
+         SATURATION_COMPONENT_WISE, but the most saturated component
+         determines the overall scaling.
+       - SATURATION_NORM: the vector norm of the position error is
+         used to determine the saturation factor (this only makes
+         sense if kp, kd, and maxvel are one-dimensional values, so
+         this constraint is enforced in other parts of the PDTask
+         implementation as well)
+    */
+    typedef enum {
+      SATURATION_OFF,
+      SATURATION_COMPONENT_WISE,
+      SATURATION_MAX_COMPONENT,
+      SATURATION_NORM
+    } saturation_policy_t;
+    
+    PDTask(std::string const & name, saturation_policy_t saturation_policy);
     
     /**
        Initialize the goalpos to initpos and the goalvel to zero. Also
-       performs sanity checks on kp, kd, and maxvel. If you pass
-       allow_scalar_to_vector=true, then any one-dimensional parameter
-       values get converted to N-dimensional vectors by filling them
-       with N copies of the value. E.g. if kp=[100.0] and initpos is
-       3-dimensional, kp would end up as [100.0, 100.0, 100.0].
+       performs sanity checks on kp, kd, and maxvel. If saturation
+       policy is opspace::PDTask::SATURATION_NORM, then kp, kd, and
+       maxvel must be single-dimensional. Otherwise, if they are
+       single-dimensional, this method converts them to N-dimensional
+       vectors by filling them with N copies of the value. E.g. if
+       kp=[100.0] and initpos is 3-dimensional, kp would end up as
+       [100.0, 100.0, 100.0].
        
        \return Success if everything went well, failure otherwise.
     */
-    Status initPDTask(Vector const & initpos,
-		      bool allow_scalar_to_vector);
+    Status initPDTask(Vector const & initpos);
     
     /**
-       Compute velocity-saturated PD command. This boils down to
-       driving the task to achieving goalpos with goalvel.
-       
-       Velocity saturation can be component_wise or not. In the former
-       case, each component is scaled according to its saturation
-       term. In the latter case, the most saturated component
-       determines the scaling of the entire vector.
-       
+       Compute PD command, with velocity saturation determined by the
+       saturation_policy specified at construction time. This drives
+       the task to achieving goalpos with goalvel.
+              
        \return Success if everything went well, failure otherwise.
     */
     Status computePDCommand(Vector const & curpos,
 			    Vector const & curvel,
-			    bool component_wise_saturation,
 			    Vector & command);
     
+    saturation_policy_t const saturation_policy_;
     bool initialized_;
     Vector goalpos_;
     Vector goalvel_;
+    Vector errpos_;
+    Vector errvel_;
     Vector kp_;
     Vector kd_;
     Vector maxvel_;
+  };
+  
+  
+  class DraftPIDTask
+    : public PDTask
+  {
+  public:
+    explicit DraftPIDTask(std::string const & name);
+    
+    virtual Status check(double const * param, double value) const;
+    virtual Status check(Vector const * param, Vector const & value) const;
+    
+    virtual Status init(Model const & model);
+    virtual Status update(Model const & model);
+    
+    virtual void dbg(std::ostream & os,
+		     std::string const & title,
+		     std::string const & prefix) const;
+    
+  protected:
+    Status initDraftPIDTask(Vector const & initpos);
+    
+    Status computeDraftPIDCommand(Vector const & curpos,
+				  Vector const & curvel,
+				  Vector & command);
+    
+    double dt_seconds_;
+    Vector ki_;
+    Vector errsum_;
+    Vector limitpos_;
+    Vector limitvel_;
+    Vector triggerpos_;
+  };
+  
+  
+  /**
+     Cartesian position task. Servos a control point, specified with
+     respect to a given end_effector link, to the goal position.
+     
+     \note This task is always three dimensional, and it relies on the
+     PDTask::SATURATION_NORM policy, so the gains and maxvel have to
+     be one-dimensional.
+     
+     Parameters (see also PDTask for inherited parameters):
+     - end_effector (string): name of the end effector link
+     - control_point (vector): reference point wrt end effector frame
+  */
+  class CartPosTask
+    : public PDTask
+  {
+  public:
+    explicit CartPosTask(std::string const & name);
+    
+    virtual Status init(Model const & model);
+    virtual Status update(Model const & model);
+    virtual Status check(std::string const * param, std::string const & value) const;
+    
+  protected:
+    std::string end_effector_name_;
+    Vector control_point_;
+    
+    mutable taoDNode const * end_effector_node_;
+    
+    taoDNode const * updateActual(Model const & model);
+  };
+  
+  
+  /**
+     Joint-space posture task. Servos the joint position towards a
+     desired posture using acceleration-bounded trajectories.
+     
+     \note Uses component-wise velocity saturation.
+
+     Parameters: inherited from PDTask.
+  */
+  class JPosTask
+    : public PDTask
+  {
+  public:
+    explicit JPosTask(std::string const & name);
+    
+    virtual Status init(Model const & model);
+    virtual Status update(Model const & model);
   };
   
   
@@ -147,37 +251,35 @@ namespace opspace {
      control law to follow a trajectory generated using the
      reflexxes_otg library,
      
-     \todo This should be a subclass of PDTask in order to take
-     advantage of the velocity saturation provided by
-     PDTask::computePDCommand(), and to reduce code duplication for
-     parameter handling.
-     
-     Parameters:
-     - dt_seconds (real): iteration timestep, for trajectory generation
-     - goal (vector): goal position (trajectory end point)
+     Parameters inherited from PDTask (this list may be outdated):
+     - goalpos (vector): desired position
+     - goalvel (vector): desired velocity
      - kp (vector): proportional gain
      - kd (vector): derivative gain
-     - maxvel (vector): maximum velocity of generated trajectory
-     - maxacc (vector): maximum acceleration of generated trajectory
+     - maxvel (vector): velocity saturation limit
+
+     Parameters added by this base class:
+     - dt_seconds (real): iteration timestep, for trajectory generation
+     - trjgoal (vector): trajectory end point
+     - maxacc (vector): maximum acceleration of the trajectory
      
      Subclasses should call initTrajectoryTask() from their init(),
      and computeTrajectoryCommand() from their computeCommand().
   */
   class TrajectoryTask
-    : public Task
+    : public PDTask
   {
   public:
     virtual ~TrajectoryTask();
     
     /**
-       Checks that dt_seconds is positive.
+       Checks that dt_seconds is positive and calls PDTask.
     */
     virtual Status check(double const * param, double value) const;
     
     /**
-       If initialized, checks the validity of goal, kp, kd, maxvel,
-       maxacc. Also sets goal_changed_=true in case a new (valid) goal
-       was specified.
+       If initialized, checks the validity of trjgoal and calls
+       PDTask::check().
     */
     virtual Status check(Vector const * param, Vector const & value) const;
     
@@ -186,28 +288,23 @@ namespace opspace {
 		     std::string const & prefix) const;
     
   protected:
-    explicit TrajectoryTask(std::string const & name);
+    typedef PDTask::saturation_policy_t saturation_policy_t;
+    
+    TrajectoryTask(std::string const & name, saturation_policy_t saturation_policy);
     
     /**
        Initializes the trajectory to be at the current position with
        zero velocity. Also does some sanity checking and optional
-       conversion of parameters. If you pass
-       allow_scalar_to_vector=true, then single-dimensional parameters
-       get blown up to the right size. This is convenient e.g. to set
-       a uniform kp for all degrees of freedom.
+       conversion of parameters. Similarly to PDTask::initPDTask(),
+       single-dimensional parameters can get blown up to the right
+       size, depending on the saturation policy.
     */
-    Status initTrajectoryTask(Vector const & initpos,
-			      bool allow_scalar_to_vector);
+    Status initTrajectoryTask(Vector const & initpos);
     
     /**
-       Computes the command for following the trajectory. If the goal
-       has been changed since the last time this method was called,
-       then it re-initializes the trajectory cursor to generate a
-       trajectory to the new goal. Otherwise it just advances the
-       cursor by dt_seconds and servos to that position and velocity.
-       
-       \todo (see also PDTask) implement PD velocity saturation
-       at maxvel_ (in addition to the velocity-limited trajectory)
+       Computes the command for following the trajectory. It advances
+       the cursor by dt_seconds toward the trjgoal and servos to that
+       position and velocity using PDTask::computePDCommand().
     */
     Status computeTrajectoryCommand(Vector const & curpos,
 				    Vector const & curvel,
@@ -215,12 +312,9 @@ namespace opspace {
     
     TypeIOTGCursor * cursor_;
     double dt_seconds_;
-    Vector goal_;
-    mutable bool goal_changed_;
-    Vector kp_;
-    Vector kd_;
-    Vector maxvel_;
+    Vector trjgoal_;
     Vector maxacc_;
+    mutable Vector qh_maxvel_;	// grr, cursor always needs multi-dim maxvel, even if saturation_norm
   };
   
   
@@ -235,11 +329,11 @@ namespace opspace {
      - end_effector_id (integer): identifier of the end effector link
      - control_point (vector): reference point wrt end effector frame
   */
-  class PositionTask
+  class CartPosTrjTask
     : public TrajectoryTask
   {
   public:
-    explicit PositionTask(std::string const & name);
+    explicit CartPosTrjTask(std::string const & name);
     
     virtual Status init(Model const & model);
     virtual Status update(Model const & model);
@@ -259,11 +353,11 @@ namespace opspace {
      
      Parameters: inherited from TrajectoryTask.
   */
-  class PostureTask
+  class JPosTrjTask
     : public TrajectoryTask
   {
   public:
-    explicit PostureTask(std::string const & name);
+    explicit JPosTrjTask(std::string const & name);
     
     virtual Status init(Model const & model);
     virtual Status update(Model const & model);
@@ -271,7 +365,7 @@ namespace opspace {
     /**
        \todo Maybe move this (or something similar) to the superclass?
     */
-    void quickSetup(double kp, double kd, double maxvel, double maxacc);
+    void quickSetup(double dt_seconds, double kp, double kd, double maxvel, double maxacc);
   };
 
 
@@ -345,6 +439,7 @@ namespace opspace {
     double kp_;
     double kd_;
     double maxvel_;
+    Vector eepos_;		// just for logging...
   };
 
   

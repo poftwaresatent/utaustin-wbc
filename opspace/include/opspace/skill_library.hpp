@@ -33,20 +33,38 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef OPSPACE_BEHAVIOR_LIBRARY_HPP
-#define OPSPACE_BEHAVIOR_LIBRARY_HPP
+#ifndef OPSPACE_SKILL_LIBRARY_HPP
+#define OPSPACE_SKILL_LIBRARY_HPP
 
-#include <opspace/Behavior.hpp>
+#include <opspace/Skill.hpp>
 #include <opspace/task_library.hpp>
 
 namespace opspace {
   
-
-  class TPBehavior
-    : public Behavior
+  
+  class GenericSkill
+    : public Skill
   {
   public:
-    TPBehavior(std::string const & name);
+    GenericSkill(std::string const & name);
+    
+    virtual Status init(Model const & model);
+    virtual Status update(Model const & model);
+    virtual task_table_t const * getTaskTable();
+    
+    void appendTask(boost::shared_ptr<Task> task);
+    
+  protected:
+    task_table_t task_table_;
+    boost::shared_ptr<TaskSlotAPI> slot_;
+  };
+  
+  
+  class TaskPostureSkill
+    : public Skill
+  {
+  public:
+    TaskPostureSkill(std::string const & name);
     
     virtual Status init(Model const & model);
     virtual Status update(Model const & model);
@@ -54,17 +72,35 @@ namespace opspace {
     virtual Status checkJStarSV(Task const * task, Vector const & sv);
     
   protected:
-    PositionTask * eepos_;
-    PostureTask * posture_;
+    CartPosTask * eepos_;
+    JPosTask * posture_;
+    task_table_t task_table_;
+  };
+  
+  
+  class TaskPostureTrjSkill
+    : public Skill
+  {
+  public:
+    TaskPostureTrjSkill(std::string const & name);
+    
+    virtual Status init(Model const & model);
+    virtual Status update(Model const & model);
+    virtual task_table_t const * getTaskTable();
+    virtual Status checkJStarSV(Task const * task, Vector const & sv);
+    
+  protected:
+    CartPosTrjTask * eepos_;
+    JPosTrjTask * posture_;
     task_table_t task_table_;
   };
 
 
-  class HelloGoodbyeBehavior
-    : public Behavior
+  class HelloGoodbyeSkill
+    : public Skill
   {
   public:
-    HelloGoodbyeBehavior(std::string const & name);
+    HelloGoodbyeSkill(std::string const & name);
     
     virtual Status init(Model const & model);
     virtual Status update(Model const & model);
@@ -85,12 +121,12 @@ namespace opspace {
     } state_;
     
     //    OrientationTask * shake_eeori_;
-    PositionTask * shake_eepos_task_;
-    PostureTask * shake_posture_task_;
+    CartPosTrjTask * shake_eepos_task_;
+    JPosTrjTask * shake_posture_task_;
     task_table_t shake_task_table_;
     
-    PositionTask * wave_eepos_task_;
-    PostureTask * wave_posture_task_;
+    CartPosTrjTask * wave_eepos_task_;
+    JPosTrjTask * wave_posture_task_;
     task_table_t wave_task_table_;
     
     Parameter * shake_eepos_goal_;
@@ -117,4 +153,4 @@ namespace opspace {
   
 }
 
-#endif // OPSPACE_BEHAVIOR_LIBRARY_HPP
+#endif // OPSPACE_SKILL_LIBRARY_HPP

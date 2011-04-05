@@ -38,6 +38,7 @@
 
 #include <jspace/Status.hpp>
 #include <jspace/wrap_eigen.hpp>
+#include <boost/shared_ptr.hpp>
 #include <map>
 
 
@@ -60,6 +61,12 @@ namespace opspace {
     PARAMETER_TYPE_VECTOR,	//!< mapped to jspace::Vector
     PARAMETER_TYPE_MATRIX	//!< mapped to jspace::Matrix
   } parameter_type_t;
+
+
+  typedef enum {
+    PARAMETER_FLAG_DEFAULT = 0,
+    PARAMETER_FLAG_NOLOG = 1
+  } parameter_flags_t;
   
   
   class ParameterReflection;
@@ -81,10 +88,12 @@ namespace opspace {
   public:
     std::string const name_;
     parameter_type_t const type_;
+    parameter_flags_t const flags_;
     ParameterReflection const * checker_;
     
     Parameter(std::string const & name,
 	      parameter_type_t type,
+	      parameter_flags_t flags,
 	      ParameterReflection const * checker);
     
     virtual ~Parameter();
@@ -109,6 +118,7 @@ namespace opspace {
   class IntegerParameter : public Parameter {
   public:
     IntegerParameter(std::string const & name,
+		     parameter_flags_t flags,
 		     ParameterReflection const * checker,
 		     int * instance);
     virtual int const * getInteger() const { return integer_; }
@@ -123,6 +133,7 @@ namespace opspace {
   class StringParameter : public Parameter {
   public:
     StringParameter(std::string const & name,
+		    parameter_flags_t flags,
 		    ParameterReflection const * checker,
 		    std::string * instance);
     virtual std::string const * getString() const { return string_; }
@@ -137,6 +148,7 @@ namespace opspace {
   class RealParameter : public Parameter {
   public:
     RealParameter(std::string const & name,
+		  parameter_flags_t flags,
 		  ParameterReflection const * checker,
 		  double * real);
     virtual double const * getReal() const { return real_; }
@@ -150,7 +162,10 @@ namespace opspace {
   /** Implementation for vector parameters: a vector of double values. */
   class VectorParameter : public Parameter {
   public:
-    VectorParameter(std::string const & name, ParameterReflection const * checker, Vector * vector);
+    VectorParameter(std::string const & name,
+		    parameter_flags_t flags,
+		    ParameterReflection const * checker,
+		    Vector * vector);
     virtual Vector const * getVector() const { return vector_; }
     virtual Status set(Vector const & vector);
     virtual void dump(std::ostream & os, std::string const & prefix) const;
@@ -162,7 +177,10 @@ namespace opspace {
   /** Implementation for matrix parameters: a matrix of double values. */
   class MatrixParameter : public Parameter {
   public:
-    MatrixParameter(std::string const & name, ParameterReflection const * checker, Matrix * matrix);
+    MatrixParameter(std::string const & name,
+		    parameter_flags_t flags,
+		    ParameterReflection const * checker,
+		    Matrix * matrix);
     virtual Matrix const * getMatrix() const { return matrix_; }
     virtual Status set(Matrix const & matrix);
     virtual void dump(std::ostream & os, std::string const & prefix) const;
@@ -179,8 +197,12 @@ namespace opspace {
      a table of Parameter instances and provides default
      implementations for parameter checker methods.
   */
-  class ParameterReflection {
+  class ParameterReflection
+  {
   public:
+    ParameterReflection(std::string const & type_name,
+			std::string const & instance_name);
+    
     virtual ~ParameterReflection();
     
     /** Default implementation always returns succes. */
@@ -197,6 +219,9 @@ namespace opspace {
     
     /** Default implementation always returns succes. */
     virtual Status check(Matrix const * param, Matrix const & value) const;
+    
+    inline std::string const & getName() const { return instance_name_; }
+    inline std::string const & getTypeName() const { return type_name_; }
     
     /**
        \return A pointer to the Parameter subclass instance which
@@ -237,6 +262,9 @@ namespace opspace {
 		      std::string const & prefix) const;
     
   protected:
+    std::string const type_name_;
+    std::string const instance_name_;
+    
     /**
        Used by subclasse to make one of their fields accessible to the
        outside. The parameter then becomes available through the
@@ -248,24 +276,101 @@ namespace opspace {
        method will call Task::check() before actually writing a new
        value into the pointer provided here at declaration time.
     */
-    IntegerParameter * declareParameter(std::string const & name, int * integer);
+    IntegerParameter * declareParameter(std::string const & name,
+					int * integer,
+					parameter_flags_t flags = PARAMETER_FLAG_DEFAULT);
     
     /** See also declareParameter(std::string const &, int *)... */
-    StringParameter * declareParameter(std::string const & name, std::string * instance);
+    StringParameter * declareParameter(std::string const & name,
+				       std::string * instance,
+				       parameter_flags_t flags = PARAMETER_FLAG_DEFAULT);
     
     /** See also declareParameter(std::string const &, int *)... */
-    RealParameter * declareParameter(std::string const & name, double * real);
+    RealParameter * declareParameter(std::string const & name,
+				     double * real,
+				     parameter_flags_t flags = PARAMETER_FLAG_DEFAULT);
 
     /** See also declareParameter(std::string const &, int *)... */
-    VectorParameter * declareParameter(std::string const & name, Vector * vector);
+    VectorParameter * declareParameter(std::string const & name,
+				       Vector * vector,
+				       parameter_flags_t flags = PARAMETER_FLAG_DEFAULT);
 
     /** See also declareParameter(std::string const &, int *)... */
-    MatrixParameter * declareParameter(std::string const & name, Matrix * matrix);
+    MatrixParameter * declareParameter(std::string const & name,
+				       Matrix * matrix,
+				       parameter_flags_t flags = PARAMETER_FLAG_DEFAULT);
     
   private:
     parameter_lookup_t parameter_lookup_;
   };
+  
+  
+  class ReflectionRegistry
+  {
+  public:
+    struct enumeration_entry_s {
+      std::string type_name, instance_name, parameter_name;
+      Parameter * parameter;
+    };
+    typedef std::vector<enumeration_entry_s> enumeration_t;
+    
+    
+    void add(boost::shared_ptr<ParameterReflection> instance);
+    
+    boost::shared_ptr<ParameterReflection> find(std::string const & type_name,
+						std::string const & instance_name);
+    
+    void enumerate(enumeration_t & enumeration);
 
+    Parameter * lookupParameter(std::string const & type_name,
+				std::string const & instance_name,
+				std::string const & parameter_name);
+    
+    Parameter const * lookupParameter(std::string const & type_name,
+				      std::string const & instance_name,
+				      std::string const & parameter_name) const;
+    
+    Parameter * lookupParameter(std::string const & type_name,
+				std::string const & instance_name,
+				std::string const & parameter_name,
+				parameter_type_t parameter_type);
+    
+    Parameter const * lookupParameter(std::string const & type_name,
+				      std::string const & instance_name,
+				      std::string const & parameter_name,
+				      parameter_type_t parameter_type) const;
+    
+  private:
+    typedef std::map<std::string, boost::shared_ptr<ParameterReflection> > instance_map_t;
+    typedef std::map<std::string, instance_map_t> type_map_t;
+    type_map_t type_map_;
+  };
+  
+  
+  class ParameterLog
+  {
+  public:
+    template<typename parameter_t, typename storage_t>
+    struct log_s {
+      explicit log_s(parameter_t const * pp): parameter(pp) {}
+      parameter_t const * parameter;
+      std::vector<storage_t> log;
+    };
+    
+    ParameterLog(std::string const & name, parameter_lookup_t const & parameter_lookup);
+    
+    void update(long long timestamp);
+    void writeFiles(std::string const & prefix, std::ostream * progress) const;
+    
+    std::string const name;
+    std::vector<long long> timestamp;
+    std::vector<log_s<IntegerParameter, int> > intlog;
+    std::vector<log_s<StringParameter, std::string> > strlog;
+    std::vector<log_s<RealParameter, double> > reallog;
+    std::vector<log_s<VectorParameter, Vector> > veclog;
+    std::vector<log_s<MatrixParameter, Matrix> > mxlog;
+  };
+  
 }
 
 #endif // OPSPACE_PARAMETER_HPP

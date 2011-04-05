@@ -34,9 +34,9 @@
  */
 
 #include <opspace/Factory.hpp>
-#include <opspace/Behavior.hpp>
+#include <opspace/Skill.hpp>
 #include <opspace/task_library.hpp>
-#include <opspace/behavior_library.hpp>
+#include <opspace/skill_library.hpp>
 #include <opspace/parse_yaml.hpp>
 #include <fstream>
 #include <stdexcept>
@@ -56,17 +56,26 @@ namespace opspace {
     if ("opspace::SelectedJointPostureTask" == type) {
       return new opspace::SelectedJointPostureTask(name);
     }
-    if ("opspace::PositionTask" == type) {
-      return new opspace::PositionTask(name);
+    if ("opspace::CartPosTrjTask" == type) {
+      return new opspace::CartPosTrjTask(name);
     }
-    if ("opspace::PostureTask" == type) {
-      return new opspace::PostureTask(name);
+    if ("opspace::JPosTrjTask" == type) {
+      return new opspace::JPosTrjTask(name);
+    }
+    if ("opspace::CartPosTask" == type) {
+      return new opspace::CartPosTask(name);
+    }
+    if ("opspace::JPosTask" == type) {
+      return new opspace::JPosTask(name);
     }
     if ("opspace::JointLimitTask" == type) {
       return new opspace::JointLimitTask(name);
     }
     if ("opspace::OrientationTask" == type) {
       return new opspace::OrientationTask(name);
+    }
+    if ("opspace::DraftPIDTask" == type) {
+      return new opspace::DraftPIDTask(name);
     }
     return 0;
   }
@@ -101,9 +110,11 @@ namespace opspace {
       YAML::Parser parser(yaml_istream);
       YAML::Node doc;
       TaskTableParser task_table_parser(*this, task_table_, dbg_);
-      BehaviorTableParser behavior_table_parser(*this, behavior_table_, dbg_);
+      SkillTableParser skill_table_parser(*this, skill_table_, dbg_);
       
-      while (parser.GetNextDocument(doc)) {
+      parser.GetNextDocument(doc); // <sigh>this'll have merge conflicts again</sigh>
+      //while (parser.GetNextDocument(doc)) {
+      {
 	for (YAML::Iterator ilist(doc.begin()); ilist != doc.end(); ++ilist) {
 	  for (YAML::Iterator idict(ilist->begin()); idict != ilist->end(); ++idict) {
 	    std::string key;
@@ -111,8 +122,11 @@ namespace opspace {
 	    if ("tasks" == key) {
 	      idict.second() >> task_table_parser;
 	    }
+	    else if ("skills" == key) {
+	      idict.second() >> skill_table_parser;
+	    }
 	    else if ("behaviors" == key) {
-	      idict.second() >> behavior_table_parser;
+	      throw std::runtime_error("deprecated key `behaviors' (use `skills' instead)");
 	    }
 	    else {
 	      throw std::runtime_error("invalid key `" + key + "'");
@@ -147,10 +161,10 @@ namespace opspace {
   }
   
   
-  Factory::behavior_table_t const & Factory::
-  getBehaviorTable() const
+  Factory::skill_table_t const & Factory::
+  getSkillTable() const
   {
-    return behavior_table_;
+    return skill_table_;
   }
   
   
@@ -167,9 +181,9 @@ namespace opspace {
 	 it != task_table_.end(); ++it) {
       (*it)->dump(os, "", prefix + "    ");
     }
-    os << prefix << "  behaviors:\n";
-    for (behavior_table_t::const_iterator it(behavior_table_.begin());
-	 it != behavior_table_.end(); ++it) {
+    os << prefix << "  skills:\n";
+    for (skill_table_t::const_iterator it(skill_table_.begin());
+	 it != skill_table_.end(); ++it) {
       (*it)->dump(os, "", prefix + "    ");
     }
   }
@@ -188,30 +202,48 @@ namespace opspace {
   }
 
   
-  boost::shared_ptr<Behavior> Factory::
-  findBehavior(std::string const & name)
+  boost::shared_ptr<Skill> Factory::
+  findSkill(std::string const & name)
     const
   {
-    for (size_t ii(0); ii < behavior_table_.size(); ++ii) {
-      if (name == behavior_table_[ii]->getName()) {
-	return behavior_table_[ii];
+    for (size_t ii(0); ii < skill_table_.size(); ++ii) {
+      if (name == skill_table_[ii]->getName()) {
+	return skill_table_[ii];
       }
     }
-    return boost::shared_ptr<Behavior>();
+    return boost::shared_ptr<Skill>();
   }
   
   
-  Behavior * createBehavior(std::string const & type, std::string const & name)
+  Skill * createSkill(std::string const & type, std::string const & name)
   {
-    if ("opspace::TPBehavior" == type) {
-      return new opspace::TPBehavior(name);
+    if ("opspace::GenericSkill" == type) {
+      return new opspace::GenericSkill(name);
     }
-    if ("opspace::HelloGoodbyeBehavior" == type) {
-      return new opspace::HelloGoodbyeBehavior(name);
+    if ("opspace::TaskPostureSkill" == type) {
+      return new opspace::TaskPostureSkill(name);
+    }
+    if ("opspace::TaskPostureTrjSkill" == type) {
+      return new opspace::TaskPostureTrjSkill(name);
+    }
+    if ("opspace::HelloGoodbyeSkill" == type) {
+      return new opspace::HelloGoodbyeSkill(name);
     }
     return 0;
   }
   
   
-
+  ReflectionRegistry * Factory::
+  createRegistry()
+  {
+    ReflectionRegistry * reg(new ReflectionRegistry());
+    for (size_t ii(0); ii < task_table_.size(); ++ii) {
+      reg->add(task_table_[ii]);
+    }
+    for (size_t ii(0); ii < skill_table_.size(); ++ii) {
+      reg->add(skill_table_[ii]);
+    }
+    return reg;
+  }
+  
 }

@@ -33,7 +33,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <opspace/behavior_library.hpp>
+#include <opspace/skill_library.hpp>
 #include <opspace/task_library.hpp>
 
 using boost::shared_ptr;
@@ -42,19 +42,75 @@ using boost::shared_ptr;
 namespace opspace {
   
   
-  TPBehavior::
-  TPBehavior(std::string const & name)
-    : Behavior(name)
+  GenericSkill::
+  GenericSkill(std::string const & name)
+    : Skill(name)
   {
-    declareSlot("default", "eepos", &eepos_);
-    declareSlot("default", "posture", &posture_);
+    slot_ = declareSlot<Task>("task");
   }
   
   
-  Status TPBehavior::
+  Status GenericSkill::
   init(Model const & model)
   {
-    Status st(Behavior::init(model));
+    Status const st(Skill::init(model));
+    if ( ! st) {
+      return st;
+    }
+    for (size_t ii(0); ii < slot_->getNInstances(); ++ii) {
+      task_table_.push_back(slot_->getInstance(ii).get());
+    }
+    return st;
+  }
+  
+  
+  Status GenericSkill::
+  update(Model const & model)
+  {
+    Status st;
+    if ( task_table_.empty()) {
+      st.ok = false;
+      st.errstr = "empty task table, did you assign any? did you forget to init()?";
+    }
+    else {
+      for (size_t ii(0); ii < task_table_.size(); ++ii) {
+	st = task_table_[ii]->update(model);
+	if ( ! st) {
+	  return st;
+	}
+      }
+    }
+    return st;
+  }
+  
+  
+  Skill::task_table_t const * GenericSkill::
+  getTaskTable()
+  {
+    return &task_table_;
+  }
+  
+  
+  void GenericSkill::
+  appendTask(boost::shared_ptr<Task> task)
+  {
+    slot_->assign(task);
+  }
+  
+  
+  TaskPostureSkill::
+  TaskPostureSkill(std::string const & name)
+    : Skill(name)
+  {
+    declareSlot("eepos", &eepos_);
+    declareSlot("posture", &posture_);
+  }
+  
+  
+  Status TaskPostureSkill::
+  init(Model const & model)
+  {
+    Status st(Skill::init(model));
     if ( ! st) {
       return st;
     }
@@ -64,7 +120,7 @@ namespace opspace {
   }
   
   
-  Status TPBehavior::
+  Status TaskPostureSkill::
   update(Model const & model)
   {
     for (size_t ii(0); ii < task_table_.size(); ++ii) {
@@ -78,14 +134,73 @@ namespace opspace {
   }
   
   
-  Behavior::task_table_t const * TPBehavior::
+  Skill::task_table_t const * TaskPostureSkill::
   getTaskTable()
   {
     return &task_table_;
   }
   
   
-  Status TPBehavior::
+  Status TaskPostureSkill::
+  checkJStarSV(Task const * task, Vector const & sv)
+  {
+    if (task == eepos_) {
+      if (sv.rows() != 3) {
+	return Status(false, "eepos dimension mismatch");
+      }
+      if (sv[2] < eepos_->getSigmaThreshold()) {
+	return Status(false, "singular eepos");
+      }
+    }
+    Status ok;
+    return ok;
+  }
+
+
+  TaskPostureTrjSkill::
+  TaskPostureTrjSkill(std::string const & name)
+    : Skill(name)
+  {
+    declareSlot("eepos", &eepos_);
+    declareSlot("posture", &posture_);
+  }
+  
+  
+  Status TaskPostureTrjSkill::
+  init(Model const & model)
+  {
+    Status st(Skill::init(model));
+    if ( ! st) {
+      return st;
+    }
+    task_table_.push_back(eepos_);
+    task_table_.push_back(posture_);
+    return st;
+  }
+  
+  
+  Status TaskPostureTrjSkill::
+  update(Model const & model)
+  {
+    for (size_t ii(0); ii < task_table_.size(); ++ii) {
+      Status const st(task_table_[ii]->update(model));
+      if ( ! st) {
+	return st;
+      }
+    }
+    Status ok;
+    return ok;
+  }
+  
+  
+  Skill::task_table_t const * TaskPostureTrjSkill::
+  getTaskTable()
+  {
+    return &task_table_;
+  }
+  
+  
+  Status TaskPostureTrjSkill::
   checkJStarSV(Task const * task, Vector const & sv)
   {
     if (task == eepos_) {
@@ -101,9 +216,9 @@ namespace opspace {
   }
   
   
-  HelloGoodbyeBehavior::
-  HelloGoodbyeBehavior(std::string const & name)
-    : Behavior(name),
+  HelloGoodbyeSkill::
+  HelloGoodbyeSkill(std::string const & name)
+    : Skill(name),
       state_(STATE_START),
       //      shake_eeori_(0),
       shake_eepos_task_(0),
@@ -129,43 +244,45 @@ namespace opspace {
       wave_count_threshold_(6)
   {
     //    declareSlot("shake", "orientation", &shake_eeori_);
-    declareSlot("shake", "position", &shake_eepos_task_);
-    declareSlot("shake", "posture", &shake_posture_task_);
-    declareSlot("wave", "position", &wave_eepos_task_);
-    declareSlot("wave", "posture", &wave_posture_task_);
+    declareSlot("shake_position", &shake_eepos_task_);
+    declareSlot("shake_posture", &shake_posture_task_);
+    declareSlot("wave_position", &wave_eepos_task_);
+    declareSlot("wave_posture", &wave_posture_task_);
   }
   
   
-  Status HelloGoodbyeBehavior::
+  Status HelloGoodbyeSkill::
   init(Model const & model)
   {
-    Status st(Behavior::init(model));
+    Status st(Skill::init(model));
     if ( ! st) {
       return st;
     }
     
-    shake_eepos_goal_ = shake_eepos_task_->lookupParameter("goal", PARAMETER_TYPE_VECTOR);
+    // XXXX to do: could read the name of the parameter from a
+    // parameter (also for other tasks)
+    shake_eepos_goal_ = shake_eepos_task_->lookupParameter("trjgoal", PARAMETER_TYPE_VECTOR);
     if ( ! shake_eepos_goal_) {
       st.ok = false;
       st.errstr = "no appropriate goal parameter in shake position task";
       return st;
     }
     
-    shake_posture_goal_ = shake_posture_task_->lookupParameter("goal", PARAMETER_TYPE_VECTOR);
+    shake_posture_goal_ = shake_posture_task_->lookupParameter("trjgoal", PARAMETER_TYPE_VECTOR);
     if ( ! shake_posture_goal_) {
       st.ok = false;
       st.errstr = "no appropriate goal parameter in shake posture task";
       return st;
     }
     
-    wave_eepos_goal_ = wave_eepos_task_->lookupParameter("goal", PARAMETER_TYPE_VECTOR);
+    wave_eepos_goal_ = wave_eepos_task_->lookupParameter("trjgoal", PARAMETER_TYPE_VECTOR);
     if ( ! wave_eepos_goal_) {
       st.ok = false;
       st.errstr = "no appropriate goal parameter in wave position task";
       return st;
     }
     
-    wave_posture_goal_ = wave_posture_task_->lookupParameter("goal", PARAMETER_TYPE_VECTOR);
+    wave_posture_goal_ = wave_posture_task_->lookupParameter("trjgoal", PARAMETER_TYPE_VECTOR);
     if ( ! wave_posture_goal_) {
       st.ok = false;
       st.errstr = "no appropriate goal parameter in wave position task";
@@ -194,7 +311,7 @@ namespace opspace {
   }
   
   
-  Status HelloGoodbyeBehavior::
+  Status HelloGoodbyeSkill::
   update(Model const & model)
   {
     Status st;
@@ -327,7 +444,7 @@ namespace opspace {
   }
   
   
-  Behavior::task_table_t const * HelloGoodbyeBehavior::
+  Skill::task_table_t const * HelloGoodbyeSkill::
   getTaskTable()
   {
     switch (state_) {
@@ -343,7 +460,7 @@ namespace opspace {
   }
   
   
-  Status HelloGoodbyeBehavior::
+  Status HelloGoodbyeSkill::
   checkJStarSV(Task const * task, Vector const & sv)
   {
     if (//(task == shake_eeori_)
@@ -363,12 +480,12 @@ namespace opspace {
   }
   
   
-  void HelloGoodbyeBehavior::
+  void HelloGoodbyeSkill::
   dbg(std::ostream & os,
       std::string const & title,
       std::string const & prefix) const
   {
-    Behavior::dbg(os, title, prefix);
+    Skill::dbg(os, title, prefix);
     os << prefix << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
     switch (state_) {
     case STATE_START:

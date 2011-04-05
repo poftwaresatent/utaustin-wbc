@@ -35,471 +35,312 @@
 
 #include <opspace/controller_library.hpp>
 #include <opspace/opspace.hpp>
-#include <opspace/TypeIOTGCursor.hpp>
-#include <jspace/Model.hpp>
-#include <tao/dynamics/taoDNode.h>
-#include <tao/dynamics/taoJoint.h>
+
+// hmm...
+#include <Eigen/LU>
+#include <Eigen/SVD>
+#include <opspace/task_library.hpp>
+
+using jspace::pretty_print;
+using boost::shared_ptr;
 
 namespace opspace {
-
-  using jspace::Matrix;
   
   
-  struct task_posture_info_getter_s
-    : public jspace::controller_info_getter_s
+  ControllerNG::
+  ControllerNG(std::string const & name)
+    : Controller(name),
+      fallback_(false),
+      loglen_(-1),
+      logsubsample_(-1),
+      logprefix_(""),
+      logcount_(-1)
   {
-    virtual void getDOFNames(Model const & model, std::vector<std::string> & names) const {
-      int const njoints(model.getNJoints());
-      names.resize(njoints + 3);
-      names[0] = "position_x";
-      names[1] = "position_y";
-      names[2] = "position_z";
-      for (int ii(0); ii < njoints; ++ii) {
-	names[ii + 3] = model.getJointName(ii);
-      }
-    }
-    
-    virtual void getDOFUnits(Model const & model, std::vector<std::string> & names) const {
-      int const njoints(model.getNJoints());
-      names.resize(njoints + 3);
-      names[0] = "m";
-      names[1] = "m";
-      names[2] = "m";
-      for (int ii(0); ii < njoints; ++ii) {
-	taoDNode const * node(model.getNode(ii));
-	taoJoint const * joint(node->getJointList());
-	if (0 != dynamic_cast<taoJointRevolute const *>(joint)) {
-	  names[ii + 3] = "rad";
-	}
-	else if (0 != dynamic_cast<taoJointPrismatic const *>(joint)) {
-	  names[ii + 3] = "m";
-	}
-	else {
-	  names[ii + 3] = "void";
-	}
-      }
-    }
-    
-    virtual void getGainNames(Model const & model, std::vector<std::string> & names) const {
-      getDOFNames(model, names);
-    }
-    
-    // Grr, yet another place that can really profit from a more
-    // generic task parameter approach: why hardcode limits?
-    virtual void getLimits(Model const & model, Vector & limits_lower, Vector & limits_upper) const
-    {
-      Vector jl_lower, jl_upper;
-      model.getJointLimits(jl_lower, jl_upper);
-      limits_lower = Vector::Zero(jl_lower.rows() + 3);
-      limits_lower[0] = -2.0;	// arbitrary...
-      limits_lower[1] = -2.0;	// arbitrary...
-      limits_lower[2] = -2.0;	// arbitrary...
-      limits_lower.block(3, 0, jl_lower.rows(), 1) = jl_lower;
-      limits_upper = Vector::Zero(jl_upper.rows() + 3);
-      limits_upper[0] = 2.0;	// arbitrary...
-      limits_upper[1] = 2.0;	// arbitrary...
-      limits_upper[2] = 2.0;	// arbitrary...
-      limits_upper.block(3, 0, jl_upper.rows(), 1) = jl_upper;
-    }
-  };
-  
-  
-  TaskPostureController::
-  TaskPostureController()
-    : info_getter_(0),
-      dt_seconds_(-1.0),
-      end_effector_(0)
-  {
+    declareParameter("loglen", &loglen_, PARAMETER_FLAG_NOLOG);
+    declareParameter("logsubsample", &logsubsample_, PARAMETER_FLAG_NOLOG);
+    declareParameter("logprefix", &logprefix_, PARAMETER_FLAG_NOLOG);
+    declareParameter("jpos", &jpos_);
+    declareParameter("jvel", &jvel_);
+    declareParameter("gamma", &gamma_);
   }
   
   
-  TaskPostureController::
-  ~TaskPostureController()
+  Status ControllerNG::
+  check(std::string const * param, std::string const & value) const
   {
-    delete info_getter_;
-  }
-  
-  
-  jspace::controller_info_getter_s const * TaskPostureController::
-  getInfo() const
-  {
-    if ( ! info_getter_) {
-      info_getter_ = new task_posture_info_getter_s();
+    if ((param == &logprefix_) && (loglen_ > 0)) {
+      // could be smart and check if another log is ongoing, but let's
+      // just abort that
+      logcount_ = 0;
     }
-    return info_getter_;
+    Status ok;
+    return ok;
   }
   
   
-  Status TaskPostureController::
+  void ControllerNG::
+  setFallbackTask(shared_ptr<Task> task)
+  {
+    fallback_task_ = task;
+  }
+  
+  
+  Status ControllerNG::
   init(Model const & model)
   {
-    if (0 > dt_seconds_) {
-      return Status(false, "you did not setCycleTime()");
+    if ( ! fallback_task_) {
+      JPosTrjTask * pt(new JPosTrjTask("ControllerNG_fallback_posture"));
+      pt->quickSetup(0.01, 50, 5, 1, 2);
+      fallback_task_.reset(pt);
     }
-    if (0 == end_effector_) {
-      return Status(false, "you did not setEndEffector()");
+    if ( ! dynamic_cast<JPosTrjTask*>(fallback_task_.get())) {
+      return Status(false, "fallback task has to be a posture (for now)");
     }
-    if (3 != control_point_.rows()) {
-      control_point_ = Vector::Zero(3);
+    return Status();
+  }
+  
+  
+  Status ControllerNG::
+  computeFallback(Model const & model,
+		  bool init_required,
+		  Vector & gamma)
+  {
+    Status st;
+    
+    if (init_required) {
+      st = fallback_task_->init(model);
+      if ( ! st) {
+	return Status(false, "fallback task failed to initialize: " + st.errstr);
+      }
     }
-    if (0 == task_.maxvel.rows()) {
-      return Status(false, "you did not setMaxvel()");
+    
+    st = fallback_task_->update(model);
+    if ( ! st) {
+      return Status(false, "fallback task failed to update: " + st.errstr);
     }
-    if (0 == task_.maxacc.rows()) {
-      return Status(false, "you did not setMaxacc()");
+    
+    Matrix aa;
+    if ( ! model.getMassInertia(aa)) {
+      return Status(false, "failed to retrieve mass inertia");
     }
-    if (0 == task_.kp.rows()) {
-      return Status(false, "you did not setGains()");
+    Vector grav;
+    if ( ! model.getGravity(grav)) {
+      return Status(false, "failed to retrieve gravity torques");
+    }
+    gamma = aa * fallback_task_->getCommand() + grav;
+    
+    // logging and debug
+    jpos_ = model.getState().position_;
+    jvel_ = model.getState().velocity_;
+    gamma_ = gamma;
+    
+    return st;
+  }
+  
+  
+  Status ControllerNG::
+  computeCommand(Model const & model,
+		 Skill & skill,
+		 Vector & gamma)
+  {
+    //////////////////////////////////////////////////
+    // Shortcut if we are already in fallback mode. Later, we'll have
+    // to code a way to get out of fallback, but for now it's a
+    // one-way ticket.
+    if (fallback_) {
+      return computeFallback(model, false, gamma);
+    }
+    //////////////////////////////////////////////////
+    
+    Status st(skill.update(model));
+    if ( ! st) {
+      fallback_ = true;
+      fallback_reason_ = "skill update failed: " + st.errstr;
+      return computeFallback(model, true, gamma);
+    }
+    
+    Skill::task_table_t const * tasks(skill.getTaskTable());
+    if ( ! tasks) {
+      fallback_ = true;
+      fallback_reason_ = "null task table";
+      return computeFallback(model, true, gamma);
+    }
+    if (tasks->empty()) {
+      fallback_ = true;
+      fallback_reason_ = "empty task table";
+      return computeFallback(model, true, gamma);
+    }
+    
+    //////////////////////////////////////////////////
+    // the magic nullspace sauce...
+    
+    Matrix ainv;
+    if ( ! model.getInverseMassInertia(ainv)) {
+      return Status(false, "failed to retrieve inverse mass inertia");
+    }
+    Vector grav;
+    if ( ! model.getGravity(grav)) {
+      return Status(false, "failed to retrieve gravity torques");
     }
     
     size_t const ndof(model.getNDOF());
-    if (ndof != posture_.maxvel.rows()) {
-      return Status(false, "invalid maxvel dimension");
-    }
-    if (ndof != posture_.maxacc.rows()) {
-      return Status(false, "invalid maxacc dimension");
-    }
-    if (ndof != posture_.kp.rows()) {
-      return Status(false, "invalid kp dimension");
-    }
-    if (ndof != posture_.kd.rows()) {
-      return Status(false, "invalid kd dimension");
+    size_t const n_minus_1(tasks->size() - 1);
+    Matrix nstar(Matrix::Identity(ndof, ndof));
+    int first_active_task_index(0); // because tasks can have empty Jacobian
+    
+    ////    sv_lstar_.resize(tasks->size());
+    if (sv_jstar_.empty()) {
+      //##################################################
+      //##################################################
+      //##################################################
+      //##################################################
+      // quick hack, will break as soon as we switch skill at
+      // runtime, but there's no duplicate-detection behind
+      // declareParameter() so it's a bit tricky to declare them on
+      // the fly...
+      //##################################################
+      //##################################################
+      //##################################################
+      //##################################################
+      sv_jstar_.resize(tasks->size());
+      for (size_t ii(0); ii < tasks->size(); ++ii) {
+	declareParameter("sv_jstar-" + (*tasks)[ii]->getName(), &(sv_jstar_[ii]));
+      }
     }
     
-    posture_.cursor = new TypeIOTGCursor(ndof, dt_seconds_);
-    task_.cursor = new TypeIOTGCursor(3, dt_seconds_);
-    
-    return latch(model);
-  }
-  
-  
-  Status TaskPostureController::
-  setGoal(Vector const & goal)
-  {
-    Status st;
-    if (3 >= goal.rows()) {
-      st.ok = false;
-      st.errstr = "invalid goal dimension";
-      return st;
-    }
-    task_.goal = goal.block(0, 0, 3, 1);
-    task_.goal_changed = true;	// here we cannot actually distinguish
-				// task from posture goal
-				// changes... ah well, that'll be
-				// easier with generic TaskParameter
-				// instances.
-    posture_.goal = goal.block(3, 0, goal.rows() - 3, 1);
-    posture_.goal_changed = true;
-    return st;
-  }
-  
-  
-  Status TaskPostureController::
-  getGoal(Vector & goal) const
-  {
-    if (0 == task_.goal.rows()) {
-      return Status(false, "undefined goal, call setGoal() first");
-    }
-    goal.resize(task_.goal.rows() + posture_.goal.rows());
-    goal << task_.goal, posture_.goal;
-    Status ok;
-    return ok;
-  }
-  
-  
-  Status TaskPostureController::
-  getActual(Vector & actual) const
-  {
-    if (0 == actual_.rows()) {
-      return Status(false, "undefined actual state, call init() first");
-    }
-    actual = actual_;
-    Status ok;
-    return ok;
-  }
-  
-  
-  Status TaskPostureController::
-  setGains(Vector const & kp, Vector const & kd)
-  {
-    Status st;
-    if ((3 >= kp.rows()) || (3 >= kd.rows())) {
-      st.ok = false;
-      st.errstr = "invalid gain dimension";
-      return st;
-    }
-    task_.kp = kp.block(0, 0, 3, 1);
-    task_.kd = kd.block(0, 0, 3, 1);
-    posture_.kp = kp.block(3, 0, kp.rows() - 3, 1);
-    posture_.kd = kd.block(3, 0, kd.rows() - 3, 1);
-    return st;
-  }
-  
-  
-  Status TaskPostureController::
-  getGains(Vector & kp, Vector & kd) const
-  {
-    if (0 == task_.kp.rows()) {
-      return Status(false, "undefined gains, call setGains() first");
-    }
-    kp.resize(task_.kp.rows() + posture_.kp.rows());
-    kp << task_.kp, posture_.kp;
-    kd.resize(task_.kd.rows() + posture_.kd.rows());
-    kd << task_.kd, posture_.kd;
-    Status ok;
-    return ok;
-  }
-  
-  
-  Status TaskPostureController::
-  latch(Model const & model)
-  {
-    Status st(updateActual(model));
-    if ( ! st) {
-      return st;
-    }
-    posture_.goal = model.getState().position_;
-    posture_.goal_changed = true;
-    task_.goal = actual_.block(0, 0, 3, 1);
-    task_.goal_changed = true;
-    return st;
-  }
-  
-  
-  Status TaskPostureController::
-  computeCommand(Model const & model, Vector & tau)
-  {
-    Status st(updateActual(model));
-    if ( ! st) {
-      return st;
+    for (size_t ii(0); ii < tasks->size(); ++ii) {
+      
+      Task const * task((*tasks)[ii]);
+      Matrix const & jac(task->getJacobian());
+      
+      // skip inactive tasks at beginning of table
+      if ((0 == jac.rows()) || (0 == jac.cols())) {
+	++first_active_task_index;
+	////	sv_lstar_[ii].resize(0);
+	sv_jstar_[ii].resize(0);
+	continue;
+      }
+      
+      Matrix jstar;
+      if (ii == first_active_task_index) {
+	jstar = jac;
+      }
+      else {
+	jstar = jac * nstar;
+      }
+      
+      Matrix jjt(jstar * jstar.transpose());
+      sv_jstar_[ii] = Eigen::SVD<Matrix>(jjt).singularValues();
+      st = skill.checkJStarSV(task, sv_jstar_[ii]);
+      if ( ! st) {
+	fallback_ = true;
+	fallback_reason_ = "checkJStarSV failed: " + st.errstr;
+	return computeFallback(model, true, gamma);
+      }
+      
+      Matrix lstar;
+      pseudoInverse(jstar * ainv * jstar.transpose(),
+		    task->getSigmaThreshold(),
+		    lstar, 0);////&sv_lstar_[ii]);
+      Vector pstar;
+      pstar = lstar * jstar * ainv * grav; // same would go for coriolis-centrifugal...
+      
+      // could add coriolis-centrifugal just like pstar...
+      if (ii == first_active_task_index) {
+	// first time around: initialize gamma
+	gamma = jstar.transpose() * (lstar * task->getCommand() + pstar);
+      }
+      else {
+	Vector fcomp;
+	// here, gamma is still at the previous iteration's value
+	fcomp = lstar * jstar * ainv * gamma;
+	gamma += jstar.transpose() * (lstar * task->getCommand() + pstar - fcomp);
+      }
+      
+      if (ii != n_minus_1) {
+	// not sure whether Eigen2 correctly handles the case where a
+	// matrix gets updated by left-multiplication...
+	Matrix const
+	  nnext((Matrix::Identity(ndof, ndof) - ainv * jstar.transpose() * lstar * jstar) * nstar);
+	nstar = nnext;
+      }
     }
     
-    //////////////////////////////////////////////////
-    // end-effector Cartesian position task
-    
-    Matrix Jfull;
-    if ( ! model.computeJacobian(end_effector_,
-				 actual_[0],
-				 actual_[1],
-				 actual_[2],
-				 Jfull)) {
-      return Status(false, "failed to compute Jacobian (probably caused by an unsupported joint type)");
+    if (tasks->size() <= first_active_task_index) {
+      fallback_ = true;
+      fallback_reason_ = "no active tasks";
+      return computeFallback(model, true, gamma);
     }
     
-    // There must be a way to store just a "block" object that refers
-    // to Jfull but acts like Jx, without copying the actual
-    // elements... but the eigen2 documentation did not show me the
-    // way to do it.
-    size_t const ndof(model.getNDOF());
-    Matrix Jx(Jfull.block(0, 0, 3, ndof));
-    
-    Matrix invA;
-    if ( ! model.getInverseMassInertia(invA)) {
-      return Status(false, "failed to read inverse mass inertia (wow, how did that happen?)");
-    }
-    Matrix Lambda_t;
-    pseudoInverse(Jx * invA * Jx.transpose(), 1e-3, Lambda_t);
-
-    // Here, too, it would be nice to just store a reference (see
-    // comments on Jx above).
-    Vector curpos(actual_.block(0, 0, 3, 1));
-    Vector curvel(Jx * model.getState().velocity_);
-    if (task_.goal_changed) {
-      task_.cursor->position() = curpos;
-      task_.cursor->velocity() = curvel;
-      task_.goal_changed = false;
-    }
-    int otg_result(task_.cursor->next(task_.maxvel,
-				      task_.maxacc,
-				      task_.goal));
-    if (0 > otg_result) {
-      return Status(false, "OTG error during task trajectory generation");
-    }
-    Vector tau_task(Jx.transpose() * (-Lambda_t)
-		    * (   task_.kp.cwise() * (curpos - task_.cursor->position())
-		        + task_.kd.cwise() * (curvel - task_.cursor->velocity())));
-    
-    //////////////////////////////////////////////////
-    // joint posture projected into nullspace of task
-    
-    Matrix Jbar(invA * Jx.transpose() * Lambda_t);
-    Matrix nullspace(Matrix::Identity(ndof, ndof) - Jbar * Jx);
-    Matrix Lambda_p;
-    pseudoInverse(nullspace * invA, 1e-3, Lambda_p);
-    
-    if (posture_.goal_changed) {
-      posture_.cursor->position() = model.getState().position_;
-      posture_.cursor->velocity() = model.getState().velocity_;
-      posture_.goal_changed = false;
-    }
-    otg_result = posture_.cursor->next(posture_.maxvel,
-				       posture_.maxacc,
-				       posture_.goal);
-    if (0 > otg_result) {
-      return Status(false, "OTG error during posture trajectory generation");
-    }
-    Vector tau_posture(nullspace.transpose() * (-Lambda_p)
-		       * (  posture_.kp.cwise() * (model.getState().position_ - posture_.cursor->position())
-			  + posture_.kd.cwise() * (model.getState().velocity_ - posture_.cursor->velocity())));
-    
-    //////////////////////////////////////////////////
-    // sum it up with gravity...
-    
-    Vector gg;
-    if ( ! model.getGravity(gg)) {
-      return Status(false, "failed to read gravity torque (wow, how did that happen?)");
-    }
-    tau = tau_task + tau_posture + gg;
+    // logging and debug
+    jpos_ = model.getState().position_;
+    jvel_ = model.getState().velocity_;
+    gamma_ = gamma;
     
     return st;
   }
   
   
-  Status TaskPostureController::
-  setCycleTime(double dt_seconds)
+  void ControllerNG::
+  dbg(std::ostream & os,
+      std::string const & title,
+      std::string const & prefix) const
   {
-    Status st;
-    if (0 >= dt_seconds) {
-      st.ok = false;
-      st.errstr = "cycle time must be > 0";
-      return st;
+    if ( ! title.empty()) {
+      os << title << "\n";
     }
-    dt_seconds_ = dt_seconds;
-    return st;
+    os << prefix << "log count: " << logcount_ << "\n"
+       << prefix << "parameters\n";
+    dump(os, "", prefix + "  ");
+    if (fallback_) {
+      os << prefix << "# FALLBACK MODE ENABLED ##########################\n"
+	 << prefix << "# reason: " << fallback_reason_ << "\n";
+    }
   }
   
   
-  Status TaskPostureController::
-  setEndEffector(taoDNode const * end_effector)
+  void ControllerNG::
+  qhlog(Skill & skill, long long timestamp)
   {
-    Status st;
-    if (0 == end_effector) {
-      st.ok = false;
-      st.errstr = "invalid end effector";
-      return st;
+    if (0 == logcount_) {
+      // initialize logging
+      log_.clear();
+      log_.push_back(shared_ptr<ParameterLog>(new ParameterLog("ctrl_" + instance_name_,
+							       getParameterTable())));
+      log_.push_back(shared_ptr<ParameterLog>(new ParameterLog("skill_" + skill.getName(),
+							       skill.getParameterTable())));
+      Skill::task_table_t const * tasks(skill.getTaskTable());
+      if (tasks) {
+	for (size_t ii(0); ii < tasks->size(); ++ii) {
+	  std::ostringstream nm;
+	  nm << "task_" << ii << "_" << (*tasks)[ii]->getName();
+	  log_.push_back(shared_ptr<ParameterLog>(new ParameterLog(nm.str(),
+								   (*tasks)[ii]->getParameterTable())));
+	}
+      }
     }
-    end_effector_ = end_effector;
-    return st;
-  }
-  
-  
-  Status TaskPostureController::
-  setControlPoint(Vector const & control_point)
-  {
-    Status st;
-    if (3 != control_point.rows()) {
-      st.ok = false;
-      st.errstr = "invalid control point dimension";
-      return st;
+    else if ((0 < loglen_) && (loglen_ == logcount_)) {
+      logcount_ = -2;
     }
-    control_point_ = control_point;
-    return st;
-  }
-  
-  
-  Status TaskPostureController::
-  getControlPoint(Vector & control_point) const
-  {
-    if (0 == control_point_.rows()) {
-      control_point_ = Vector::Zero(3);
+    if (0 <= logcount_) {
+      ++logcount_;
     }
-    control_point = control_point_;
-    Status ok;
-    return ok;
-  }
-  
-  
-  Status TaskPostureController::
-  setMaxvel(Vector const & maxvel)
-  {
-    Status st;
-    if (3 >= maxvel.rows()) {
-      st.ok = false;
-      st.errstr = "invalid maxvel dimension";
-      return st;
-    }
-    task_.maxvel = maxvel.block(0, 0, 3, 1);
-    posture_.maxvel = maxvel.block(3, 0, maxvel.rows() - 3, 1);
-    return st;
-  }
-  
-  
-  Status TaskPostureController::
-  getMaxvel(Vector & maxvel) const
-  {
-    if (0 == task_.maxvel.rows()) {
-      return Status(false, "undefined maxvel, call setMaxvel() first");
-    }
-    maxvel.resize(task_.maxvel.rows() + posture_.maxvel.rows());
-    maxvel << task_.maxvel, posture_.maxvel;
-    Status ok;
-    return ok;
-  }
-  
-  
-  Status TaskPostureController::
-  setMaxacc(Vector const & maxacc)
-  {
-    Status st;
-    if (3 >= maxacc.rows()) {
-      st.ok = false;
-      st.errstr = "invalid maxacc dimension";
-      return st;
-    }
-    task_.maxacc = maxacc.block(0, 0, 3, 1);
-    posture_.maxacc = maxacc.block(3, 0, maxacc.rows() - 3, 1);
-    return st;
-  }
-  
-  
-  Status TaskPostureController::
-  getMaxacc(Vector & maxacc) const
-  {
-    if (0 == task_.maxacc.rows()) {
-      return Status(false, "undefined maxacc, call setMaxacc() first");
-    }
-    maxacc.resize(task_.maxacc.rows() + posture_.maxacc.rows());
-    maxacc << task_.maxacc, posture_.maxacc;
-    Status ok;
-    return ok;
-  }
-  
-  
-  Status TaskPostureController::
-  updateActual(Model const & model)
-  {
-    if (0 == end_effector_) {
-      return Status(false, "you did not call setEndEffector()");
-    }
-    if (0 == control_point_.rows()) {
-      control_point_ = Vector::Zero(3);
-    }
-    jspace::Transform ee;
-    if ( ! model.computeGlobalFrame(end_effector_,
-				    control_point_[0],
-				    control_point_[1],
-				    control_point_[2],
-				    ee)) {
-      return Status(false, "you gave me an invalid end effector");
-    }
-    actual_.resize(3 + model.getNDOF());
-    actual_ << ee.translation(), model.getState().position_;
-    Status ok;
-    return ok;
-  }
-  
     
-  TaskPostureController::level_s::
-  level_s()
-    : cursor(0)
-  {
-  }
-  
+    if (0 < logcount_) {
+      if ((logsubsample_ <= 0)
+	  || (0 == (logcount_ % logsubsample_))) {
+	for (size_t ii(0); ii < log_.size(); ++ii) {
+	  log_[ii]->update(timestamp);
+	}
+      }
+    }
     
-  TaskPostureController::level_s::
-  ~level_s()
-  {
-    delete cursor;
+    if (-2 == logcount_) {
+      for (size_t ii(0); ii < log_.size(); ++ii) {
+	log_[ii]->writeFiles(logprefix_, &std::cerr);
+      }
+      logcount_ = -1;
+    }
   }
   
 }

@@ -34,7 +34,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <opspace/Behavior.hpp>
+#include <opspace/Skill.hpp>
 #include <opspace/Factory.hpp>
 #include <opspace/parse_yaml.hpp>
 #include <stdexcept>
@@ -59,14 +59,14 @@ TEST (parse, tasks_only)
     "    selection: [  0.0,  1.0,  0.0,  1.0,  0.0,  1.0 ]\n"
     "    kp: 100.0\n"
     "    kd:  20.0\n"
-    "  - type: opspace::PositionTask\n"
+    "  - type: opspace::CartPosTrjTask\n"
     "    name: eepos\n"
     "    dt_seconds: 0.002\n"
     "    kp: [ 100.0 ]\n"
     "    kd: [  20.0 ]\n"
     "    maxvel: [ 0.5 ]\n"
     "    maxacc: [ 1.5 ]\n"
-    "  - type: opspace::PostureTask\n"
+    "  - type: opspace::JPosTrjTask\n"
     "    name: posture\n"
     "    dt_seconds: 0.002\n"
     "    kp: [ 400.0, 400.0, 400.0, 100.0, 100.0, 100.0, 100.0 ]\n"
@@ -80,7 +80,7 @@ TEST (parse, tasks_only)
     st = factory.parseString(yaml_string);
     EXPECT_TRUE (st.ok) << st.errstr;
     EXPECT_FALSE (factory.getTaskTable().empty()) << "task table should not be empty";
-    EXPECT_TRUE (factory.getBehaviorTable().empty()) << "behaviors table should be empty";
+    EXPECT_TRUE (factory.getSkillTable().empty()) << "skill table should be empty";
     factory.dump(cout, "*** dump of factory", "* ");
   }
   catch (YAML::Exception const & ee) {
@@ -92,7 +92,7 @@ TEST (parse, tasks_only)
 }
 
 
-TEST (parse, tasks_and_behaviors)
+TEST (parse, tasks_and_skills)
 {
   static char * const yaml_string =
     "- tasks:\n"
@@ -106,26 +106,41 @@ TEST (parse, tasks_and_behaviors)
     "    selection: [  0.0,  1.0,  0.0,  1.0,  0.0,  1.0 ]\n"
     "    kp: 100.0\n"
     "    kd:  20.0\n"
-    "  - type: opspace::PositionTask\n"
-    "    name: eepos_instance\n"
+    "  - type: opspace::CartPosTrjTask\n"
+    "    name: eepos_trj\n"
     "    dt_seconds: 0.002\n"
     "    kp: [ 100.0 ]\n"
     "    kd: [  20.0 ]\n"
     "    maxvel: [ 0.5 ]\n"
     "    maxacc: [ 1.5 ]\n"
-    "  - type: opspace::PostureTask\n"
-    "    name: posture_instance\n"
+    "  - type: opspace::JPosTrjTask\n"
+    "    name: posture_trj\n"
     "    dt_seconds: 0.002\n"
     "    kp: [ 400.0, 400.0, 400.0, 100.0, 100.0, 100.0, 100.0 ]\n"
     "    kd: [  40.0,  40.0,  40.0,  20.0,  20.0,  20.0,  20.0 ]\n"
     "    maxvel: [ 3.1416 ]\n"
     "    maxacc: [ 6.2832 ]\n"
-    "- behaviors:\n"
-    "  - type: opspace::TPBehavior\n"
+    "  - type: opspace::CartPosTask\n"
+    "    name: eepos_notrj\n"
+    "    kp: [ 100.0 ]\n"
+    "    kd: [  20.0 ]\n"
+    "    maxvel: [ 0.5 ]\n"
+    "  - type: opspace::JPosTask\n"
+    "    name: posture_notrj\n"
+    "    kp: [ 400.0, 400.0, 400.0, 100.0, 100.0, 100.0, 100.0 ]\n"
+    "    kd: [  40.0,  40.0,  40.0,  20.0,  20.0,  20.0,  20.0 ]\n"
+    "    maxvel: [ 3.1416 ]\n"
+    "- skills:\n"
+    "  - type: opspace::TaskPostureTrjSkill\n"
     "    name: tpb\n"
-    "    default:\n"
-    "      eepos: eepos_instance\n"
-    "      posture: posture_instance\n";
+    "    slots:\n"
+    "      eepos: eepos_trj\n"
+    "      posture: posture_trj\n"
+    "  - type: opspace::TaskPostureSkill\n"
+    "    name: tpb\n"
+    "    slots:\n"
+    "      eepos: eepos_notrj\n"
+    "      posture: posture_notrj\n";
   
   try {
     Factory factory(&cout);
@@ -133,7 +148,7 @@ TEST (parse, tasks_and_behaviors)
     st = factory.parseString(yaml_string);
     EXPECT_TRUE (st.ok) << st.errstr;
     EXPECT_FALSE (factory.getTaskTable().empty()) << "task table should not be empty";
-    EXPECT_FALSE (factory.getBehaviorTable().empty()) << "behaviors table should not be empty";
+    EXPECT_FALSE (factory.getSkillTable().empty()) << "skills table should not be empty";
     factory.dump(cout, "*** dump of factory", "* ");
   }
   catch (YAML::Exception const & ee) {
