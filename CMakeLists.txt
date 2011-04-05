@@ -179,5 +179,5 @@ subdirs (
   )
 
 if (HAVE_M3)
-  subdirs (apps)
+  subdirs (m3_apps)
 endif (HAVE_M3)
