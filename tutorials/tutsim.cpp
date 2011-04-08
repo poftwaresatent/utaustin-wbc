@@ -81,8 +81,8 @@ namespace tutsim {
       : Fl_Window(width, height, title)
     {
       begin();
-      drawing = new Drawing(0, 0, width, height);
-      quit = new Fl_Button(width / 2 - 50, width + 50, 100, 30, "&Quit");
+      drawing = new Drawing(0, 0, width, height - 50);
+      quit = new Fl_Button(width / 2 - 50, height - 40, 100, 30, "&Quit");
       quit->callback(cb_quit, this);
       end();
       resizable(this);
