@@ -1,0 +1,128 @@
+<?xml version="1.0" ?>
+<dynworld>
+  <baseNode>
+    <gravity>0, 0, -9.81</gravity>
+    <pos>0, 0, 0</pos>
+    <rot>1, 0, 0, 0</rot>
+
+    <jointNode>
+      <ID>0</ID>
+      <jointName>a1</jointName>
+      <linkName>a1</linkName>
+      <type>R</type>
+      <axis>X</axis>
+      <mass>10</mass>
+      <inertia>0.83, 0.83, 0.0</inertia>
+      <com>0, 0, -0.5</com>
+      <pos>0, 0, 0</pos>
+      <rot>0, 0, 1, 0</rot>
+
+      <jointNode>
+        <ID>1</ID>
+	<jointName>a2</jointName>
+	<linkName>a2</linkName>
+        <type>R</type>
+        <axis>X</axis>
+        <mass>5.12</mass>
+        <inertia>0.2731, 0.2731, 0.0</inertia>
+        <com>0, 0, -0.4</com>
+        <pos>0, 0, -1</pos>
+        <rot>0, 0, 1, 0</rot>
+	
+	<jointNode>
+	  <ID>2</ID>
+	  <jointName>a3</jointName>
+	  <linkName>a3</linkName>
+	  <type>R</type>
+	  <axis>X</axis>
+	  <mass>10</mass>
+	  <inertia>0.83, 0.83, 0.0</inertia>
+	  <com>0, 0, 0</com>
+	  <pos>0, 0, -0.8</pos>
+	  <rot>0, 0, 1, 0</rot>
+	  
+	  <jointNode>
+	    <ID>3</ID>
+	    <jointName>l1</jointName>
+	    <linkName>l1</linkName>
+	    <type>R</type>
+	    <axis>X</axis>
+	    <mass>2.16</mass>
+	    <inertia>0.0648, 0.0648, 0.0</inertia>
+	    <com>0, 0, -0.3</com>
+	    <pos>0, -0.5, 0</pos>
+	    <rot>0, 0, 1, 0</rot>
+	    
+	    <jointNode>
+	      <ID>4</ID>
+	      <jointName>l2</jointName>
+	      <linkName>l2</linkName>
+	      <type>R</type>
+	      <axis>X</axis>
+	      <mass>1.106</mass>
+	      <inertia>0.021234, 0.021234, 0.0</inertia>
+	      <com>0, 0, -0.24</com>
+	      <pos>0, 0, -0.6</pos>
+	      <rot>0, 0, 1, 0</rot>
+	      
+	      <jointNode>
+		<ID>5</ID>
+		<jointName>l3</jointName>
+		<linkName>l3</linkName>
+		<type>R</type>
+		<axis>X</axis>
+		<mass>0.27</mass>
+		<inertia>0.002025, 0.002025, 0.0</inertia>
+		<com>0, 0, 0</com>
+		<pos>0, 0, -0.48</pos>
+		<rot>0, 0, 1, 0</rot>
+		
+	      </jointNode>
+	    </jointNode>
+	  </jointNode>
+	  
+	  <jointNode>
+	    <ID>6</ID>
+	    <jointName>r1</jointName>
+	    <linkName>r1</linkName>
+	    <type>R</type>
+	    <axis>X</axis>
+	    <mass>2.16</mass>
+	    <inertia>0.0648, 0.0648, 0.0</inertia>
+	    <com>0, 0, -0.3</com>
+	    <pos>0, 0.5, 0</pos>
+	    <rot>0, 0, 1, 0</rot>
+	    
+	    <jointNode>
+	      <ID>7</ID>
+	      <jointName>r2</jointName>
+	      <linkName>r2</linkName>
+	      <type>R</type>
+	      <axis>X</axis>
+	      <mass>1.106</mass>
+	      <inertia>0.021234, 0.021234, 0.0</inertia>
+	      <com>0, 0, -0.24</com>
+	      <pos>0, 0, -0.6</pos>
+	      <rot>0, 0, 1, 0</rot>
+	      
+	      <jointNode>
+		<ID>8</ID>
+		<jointName>r3</jointName>
+		<linkName>r3</linkName>
+		<type>R</type>
+		<axis>X</axis>
+		<mass>0.27</mass>
+		<inertia>0.002025, 0.002025, 0.0</inertia>
+		<com>0, 0, 0</com>
+		<pos>0, 0, -0.48</pos>
+		<rot>0, 0, 1, 0</rot>
+		
+	      </jointNode>
+	    </jointNode>
+	  </jointNode>
+	  
+	</jointNode>
+      </jointNode>
+    </jointNode>
+  </baseNode>
+</dynworld>

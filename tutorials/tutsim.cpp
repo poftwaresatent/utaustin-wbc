@@ -29,6 +29,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <jspace/Model.hpp>
+#include <jspace/test/sai_util.hpp>
+#include <boost/shared_ptr.hpp>
+
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
 #include <FL/Fl_Button.H>
@@ -102,8 +106,19 @@ namespace tutsim {
 }
 
 
+static std::string model_filename("/rolo/soft/utaustin-wbc/tutorials/tutrob.xml");
+static boost::shared_ptr<jspace::Model> model;
+
+
 int main(int argc, char ** argv)
 {
+  try {
+    model.reset(jspace::test::parse_sai_xml_file(model_filename, false));
+  }
+  catch (std::runtime_error const & ee) {
+    errx(EXIT_FAILURE, "EXCEPTION: %s", ee.what());
+  }
+
   tutsim::Window win(300, 200, "tutsim");
   return Fl::run();
 }
