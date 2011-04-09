@@ -29,15 +29,13 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <jspace/Model.hpp>
-#include <jspace/test/sai_util.hpp>
-#include <tao/dynamics/taoDNode.h>
+#include "tutsim.hpp"
 
+#include <jspace/Model.hpp>
+#include <tao/dynamics/taoDNode.h>
 #include <tao/matrix/TaoDeMath.h>
 #include <tao/matrix/TaoDeQuaternion.h>
 #include <tao/matrix/TaoDeFrame.h>
-
-#include <boost/shared_ptr.hpp>
 
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
@@ -51,10 +49,10 @@
 namespace tutsim {
   
   
-  class Drawing : public Fl_Widget {
+  class Simulator : public Fl_Widget {
   public:
-    Drawing(int xx, int yy, int width, int height, const char * label = 0);
-    virtual ~Drawing();
+    Simulator(int xx, int yy, int width, int height, const char * label = 0);
+    virtual ~Simulator();
     
     virtual void draw();
     
@@ -62,7 +60,7 @@ namespace tutsim {
     static void timer_cb(void * param);
     
     enum {
-      SWAY, FALL
+      SWAY, SERVO
     } state_;
     
     enum {
@@ -70,7 +68,6 @@ namespace tutsim {
     };
     
     taoDNode const * node_[NDOF];
-    struct timeval tstart_;
   };
   
   
@@ -80,7 +77,7 @@ namespace tutsim {
     
     virtual void resize(int x, int y, int w, int h);
     
-    Drawing * drawing;
+    Simulator * simulator;
     Fl_Button * toggle;
     Fl_Button * quit;
     
@@ -88,29 +85,49 @@ namespace tutsim {
     static void cb_quit(Fl_Widget * widget, void * param);
   };
   
-}
-
-
-static std::string model_filename("/rolo/soft/utaustin-wbc/tutorials/tutrob.xml");
-static boost::shared_ptr<jspace::Model> model;
-static jspace::State state;
-static size_t ndof;
-
-
-int main(int argc, char ** argv)
-{
-  model.reset(jspace::test::parse_sai_xml_file(model_filename, true));
-  ndof = model->getNDOF();
-  state.init(ndof, ndof, ndof);
-  tutsim::Window win(300, 200, "tutsim");
-  return Fl::run();
-}
-
-
-namespace tutsim {
   
-  Drawing::
-  Drawing(int xx, int yy, int width, int height, const char * label)
+  static jspace::Model * model;
+  static void (*servo_cb)(double wall_time_ms,
+			  double sim_time_ms,
+			  jspace::Model const & model,
+			  jspace::Vector & command);
+  static jspace::State state;
+  static size_t ndof;
+  static double gfx_rate_hz;
+  static double servo_rate_hz;
+  static double sim_rate_hz;
+  
+  
+  int run(double _gfx_rate_hz,
+	  double _servo_rate_hz,
+	  double _sim_rate_hz,
+	  jspace::Model * _model,
+	  void (*_servo_cb)(double wall_time_ms,
+			    double sim_time_ms,
+			    jspace::Model const & model,
+			    jspace::Vector & command),
+	  int width, int height, char const * title)
+  {
+    if (_gfx_rate_hz <= 0.0) {
+      errx(EXIT_FAILURE, "invalid gfx_rate_hz %g (must be > 0)", _gfx_rate_hz);
+    }
+    if (_servo_rate_hz <= 0.0) {
+      errx(EXIT_FAILURE, "invalid servo_rate_hz %g (must be > 0)", _servo_rate_hz);
+    }
+    gfx_rate_hz = _gfx_rate_hz;
+    servo_rate_hz = _servo_rate_hz;
+    sim_rate_hz = _sim_rate_hz;
+    model = _model;
+    servo_cb = _servo_cb;
+    ndof = model->getNDOF();
+    state.init(ndof, ndof, ndof);
+    Window win(width, height, title);
+    return Fl::run();
+  }
+  
+  
+  Simulator::
+  Simulator(int xx, int yy, int width, int height, const char * label)
     : Fl_Widget(xx, yy, width, height, label),
       state_(SWAY)
   {
@@ -118,8 +135,8 @@ namespace tutsim {
   }
   
   
-  Drawing::
-  ~Drawing()
+  Simulator::
+  ~Simulator()
   {
     if (node_[0]) {
       Fl::remove_timeout(timer_cb, this);
@@ -127,14 +144,11 @@ namespace tutsim {
   }
   
   
-  void Drawing::
+  void Simulator::
   draw()
   {
     if ( ! node_[0]) {
-      if (0 != gettimeofday(&tstart_, 0)) {
-	errx(EXIT_FAILURE, "gettimofday failed");
-      }
-      Fl::add_timeout(0.5, timer_cb, this);
+      Fl::add_timeout(0.1, timer_cb, this);
       node_[A1] = model->getNodeByName("a1");
       node_[A2] = model->getNodeByName("a2");
       node_[A3] = model->getNodeByName("a3");
@@ -146,7 +160,7 @@ namespace tutsim {
       node_[R3] = model->getNodeByName("r3");
       for (size_t ii(0); ii < NDOF; ++ii) {
 	if ( ! node_[ii]) {
-	  errx(EXIT_FAILURE, "tutsim::Drawing::draw(): missing node");
+	  errx(EXIT_FAILURE, "tutsim::Simulator::draw(): missing node");
 	}
       }
     }
@@ -219,27 +233,62 @@ namespace tutsim {
   }
   
   
-  void Drawing::
+  static double servo_dt_ms;
+  
+  
+  void Simulator::
   tick()
   {
-    if (SWAY == state_) {
+    static struct timeval wall_time_start;
+    static size_t sim_nsteps(0);
+    static double wall_time_ms, sim_time_ms, sim_dt;
+    static double gfx_dt_ms, gfx_next_ms;
+    
+    if (sim_nsteps == 0) {	// lazy init
+      if (0 != gettimeofday(&wall_time_start, 0)) {
+	errx(EXIT_FAILURE, "gettimofday failed");
+      }
+      wall_time_ms = 0;
+      sim_time_ms = 0;
+      servo_dt_ms = 1e3 / servo_rate_hz;
+      if (sim_rate_hz <= servo_rate_hz) {
+	sim_rate_hz = servo_rate_hz;
+	sim_nsteps = 1;
+      }
+      else {
+	sim_nsteps = llrint(ceil(sim_rate_hz / servo_rate_hz));
+	sim_rate_hz = sim_nsteps * servo_rate_hz;
+      }
+      sim_dt = 1.0 / sim_rate_hz;
+      gfx_dt_ms = 1e3 / gfx_rate_hz;
+      gfx_next_ms = -1;
+    }
+    else {
       struct timeval now;
       if (0 != gettimeofday(&now, 0)) {
 	errx(EXIT_FAILURE, "gettimofday failed");
       }
-      double const tt((tstart_.tv_sec - now.tv_sec) + 1e-6 * (tstart_.tv_usec - now.tv_usec));
+      wall_time_ms = 1e3 * (now.tv_sec - wall_time_start.tv_sec)
+	+ 1e-3 * (now.tv_usec - wall_time_start.tv_usec);
+      sim_time_ms += servo_dt_ms;
+    }
+    
+    if (SWAY == state_) {
       for (size_t ii(0); ii < ndof; ++ii) {
-	state.position_[ii] = 0.1 * sin(ii + tt);
-	state.velocity_[ii] = 0.05 * cos(ii + tt);
+	state.position_[ii] = 0.1 * sin(ii + 1e-3 * wall_time_ms);
+	state.velocity_[ii] = 0.05 * cos(ii + 1e-3 * wall_time_ms);
 	state.force_[ii] = 0.0;
       }
-      ////    jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
       model->update(state);
     }
-    else if (FALL == state_) {
+    else if (SERVO == state_) {
+      servo_cb(wall_time_ms, sim_time_ms, *model, state.force_);
+      if (state.force_.rows() != ndof) {
+	errx(EXIT_FAILURE, "invalid command dimension %d (should be %zu)", state.force_.rows(), ndof);
+      }
       jspace::Matrix ainv;
       jspace::Vector gg, bb, ddq;
-      for (size_t ii(0); ii < 10; ++ii) {
+      for (size_t ii(0); ii < sim_nsteps; ++ii) {
 	if ( ! model->getInverseMassInertia(ainv)) {
 	  errx(EXIT_FAILURE, "model->getInverseMassInertia() failed");
 	}
@@ -249,24 +298,30 @@ namespace tutsim {
 	if ( ! model->getCoriolisCentrifugal(bb)) {
 	  errx(EXIT_FAILURE, "model->getCoriolisCentrifugal() failed");
 	}
-	ddq = ainv * (-bb - gg);
-	state.velocity_ += 0.005 * ddq;
-	state.position_ += 0.005 * state.velocity_;
+	ddq = ainv * (state.force_ - bb - gg);
+	state.velocity_ += sim_dt * ddq;
+	state.position_ += sim_dt * state.velocity_;
 	model->update(state);
       }
     }
     else {
       errx(EXIT_FAILURE, "invalid state %d", state_);
     }
-    redraw();
+    
+    if (wall_time_ms >= gfx_next_ms) {
+      redraw();      
+      gfx_next_ms += gfx_dt_ms;
+    }
   }
   
   
-  void Drawing::
+  void Simulator::
   timer_cb(void * param)
   {
-    reinterpret_cast<Drawing*>(param)->tick();
-    Fl::repeat_timeout(0.05, timer_cb, param);
+    reinterpret_cast<Simulator*>(param)->tick();
+    Fl::repeat_timeout(1e-3 * servo_dt_ms, // gets initialized within tick()
+		       timer_cb,
+		       param);
   }
   
   
@@ -275,9 +330,9 @@ namespace tutsim {
     : Fl_Window(width, height, title)
   {
     begin();
-    drawing = new Drawing(0, 0, width, height - 40);
+    simulator = new Simulator(0, 0, width, height - 40);
     toggle = new Fl_Button(5, height - 35, 100, 30, "&Toggle");
-    toggle->callback(cb_toggle, drawing);
+    toggle->callback(cb_toggle, simulator);
     quit = new Fl_Button(width - 105, height - 35, 100, 30, "&Quit");
     quit->callback(cb_quit, this);
     end();
@@ -290,7 +345,7 @@ namespace tutsim {
   resize(int x, int y, int w, int h)
   {
     Fl_Window::resize(x, y, w, h);
-    drawing->resize(0, 0, w, h - 40);
+    simulator->resize(0, 0, w, h - 40);
     toggle->resize(5, h-35, 100, 30);
     quit->resize(w-105, h-35, 100, 30);
   }
@@ -299,12 +354,12 @@ namespace tutsim {
   void Window::
   cb_toggle(Fl_Widget * widget, void * param)
   {
-    Drawing * dd(reinterpret_cast<Drawing*>(param));
-    if (Drawing::SWAY == dd->state_) {
-      dd->state_ = Drawing::FALL;
+    Simulator * dd(reinterpret_cast<Simulator*>(param));
+    if (Simulator::SWAY == dd->state_) {
+      dd->state_ = Simulator::SERVO;
     }
     else {
-      dd->state_ = Drawing::SWAY;
+      dd->state_ = Simulator::SWAY;
     }
   }
   

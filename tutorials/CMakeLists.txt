@@ -10,6 +10,7 @@ set (FLTK_SKIP_IMAGES ON)
 set (FLTK_SKIP_FLUID ON)
 include (FindFLTK)
 
-add_executable (tutsim tutsim.cpp)
-target_link_libraries (tutsim opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
-#set_target_properties (tutsim PROPERTIES LINK_FLAGS "-arch i386")
+add_library (tut STATIC tutsim.cpp)
+
+add_executable (tutmain tutmain.cpp)
+target_link_libraries (tutmain tut opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
