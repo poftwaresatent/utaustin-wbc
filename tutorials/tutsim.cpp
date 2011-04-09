@@ -43,28 +43,30 @@
 #include <FL/Fl_Window.H>
 #include <FL/Fl_Button.H>
 #include <FL/fl_draw.H>
-//#include <limits>
 
 #include <err.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <math.h>
+#include <sys/time.h>
 
 
 namespace tutsim {
   
+  
   class Drawing : public Fl_Widget {
   public:
     Drawing(int xx, int yy, int width, int height, const char * label = 0);
+    virtual ~Drawing();
+    void tick();
     
   protected:
     virtual void draw();
+    static void timer_cb(void * param);
     
     enum {
       A1, A2, A3, L1, L2, L3, R1, R2, R3, NDOF
     };
     
     taoDNode const * node_[NDOF];
+    struct timeval tstart_;
   };
   
   
@@ -84,12 +86,16 @@ namespace tutsim {
 
 static std::string model_filename("/rolo/soft/utaustin-wbc/tutorials/tutrob.xml");
 static boost::shared_ptr<jspace::Model> model;
+static jspace::State state;
+static size_t ndof;
 
 
 int main(int argc, char ** argv)
 {
   try {
     model.reset(jspace::test::parse_sai_xml_file(model_filename, false));
+    ndof = model->getNDOF();
+    state.init(ndof, ndof, ndof);
     tutsim::Window win(300, 200, "tutsim");
     return Fl::run();
   }
@@ -109,10 +115,23 @@ namespace tutsim {
   }
   
   
+  Drawing::
+  ~Drawing()
+  {
+    if (node_[0]) {
+      Fl::remove_timeout(timer_cb, this);
+    }
+  }
+  
+  
   void Drawing::
   draw()
   {
     if ( ! node_[0]) {
+      if (0 != gettimeofday(&tstart_, 0)) {
+	throw std::runtime_error("gettimofday failed");
+      }
+      Fl::add_timeout(0.5, timer_cb, this);
       node_[A1] = model->getNodeByName("a1");
       node_[A2] = model->getNodeByName("a2");
       node_[A3] = model->getNodeByName("a3");
@@ -194,6 +213,33 @@ namespace tutsim {
 	    y0 - (aglob.translation()[2] * scale),
 	    x0 + (bglob.translation()[1] * scale),
 	    y0 - (bglob.translation()[2] * scale));
+  }
+  
+  
+  void Drawing::
+  tick()
+  {
+    struct timeval now;
+    if (0 != gettimeofday(&now, 0)) {
+      throw std::runtime_error("gettimofday failed");
+    }
+    double const tt((tstart_.tv_sec - now.tv_sec) + 1e-6 * (tstart_.tv_usec - now.tv_usec));
+    for (size_t ii(0); ii < ndof; ++ii) {
+      state.position_[ii] = 0.1 * sin(ii + tt);
+      state.velocity_[ii] = 0.05 * cos(ii + tt);
+      state.force_[ii] = 0.0;
+    }
+    ////    jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
+    model->update(state);
+    damage(FL_DAMAGE_USER1);
+  }
+  
+  
+  void Drawing::
+  timer_cb(void * param)
+  {
+    reinterpret_cast<Drawing*>(param)->tick();
+    Fl::repeat_timeout(0.05, timer_cb, param);
   }
   
   
