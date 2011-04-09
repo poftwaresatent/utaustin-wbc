@@ -60,14 +60,11 @@ namespace tutsim {
     static void timer_cb(void * param);
     
     enum {
-      SWAY, SERVO
-    } state_;
-    
-    enum {
       A1, A2, A3, L1, L2, L3, R1, R2, R3, NDOF
     };
     
     taoDNode const * node_[NDOF];
+    size_t toggle_count_;
   };
   
   
@@ -87,9 +84,10 @@ namespace tutsim {
   
   
   static jspace::Model * model;
-  static void (*servo_cb)(double wall_time_ms,
+  static bool (*servo_cb)(size_t toggle_count,
+			  double wall_time_ms,
 			  double sim_time_ms,
-			  jspace::Model const & model,
+			  jspace::State const & state,
 			  jspace::Vector & command);
   static jspace::State state;
   static size_t ndof;
@@ -102,9 +100,10 @@ namespace tutsim {
 	  double _servo_rate_hz,
 	  double _sim_rate_hz,
 	  jspace::Model * _model,
-	  void (*_servo_cb)(double wall_time_ms,
+	  bool (*_servo_cb)(size_t toggle_count,
+			    double wall_time_ms,
 			    double sim_time_ms,
-			    jspace::Model const & model,
+			    jspace::State const & state,
 			    jspace::Vector & command),
 	  int width, int height, char const * title)
   {
@@ -121,6 +120,7 @@ namespace tutsim {
     servo_cb = _servo_cb;
     ndof = model->getNDOF();
     state.init(ndof, ndof, ndof);
+    model->update(state);
     Window win(width, height, title);
     return Fl::run();
   }
@@ -129,7 +129,7 @@ namespace tutsim {
   Simulator::
   Simulator(int xx, int yy, int width, int height, const char * label)
     : Fl_Widget(xx, yy, width, height, label),
-      state_(SWAY)
+      toggle_count_(0)
   {
     node_[0] = 0;
   }
@@ -273,19 +273,15 @@ namespace tutsim {
       sim_time_ms += servo_dt_ms;
     }
     
-    if (SWAY == state_) {
-      for (size_t ii(0); ii < ndof; ++ii) {
-	state.position_[ii] = 0.1 * sin(ii + 1e-3 * wall_time_ms);
-	state.velocity_[ii] = 0.05 * cos(ii + 1e-3 * wall_time_ms);
-	state.force_[ii] = 0.0;
-      }
-      model->update(state);
+    jspace::Vector command;
+    if ( ! servo_cb(toggle_count_, wall_time_ms, sim_time_ms, state, command)) {
+      state = model->getState();
     }
-    else if (SERVO == state_) {
-      servo_cb(wall_time_ms, sim_time_ms, *model, state.force_);
-      if (state.force_.rows() != ndof) {
-	errx(EXIT_FAILURE, "invalid command dimension %d (should be %zu)", state.force_.rows(), ndof);
+    else {
+      if (command.rows() != ndof) {
+	errx(EXIT_FAILURE, "invalid command dimension %d (should be %zu)", command.rows(), ndof);
       }
+      state.force_ = command;	// could ramp it or clamp it or...
       jspace::Matrix ainv;
       jspace::Vector gg, bb, ddq;
       for (size_t ii(0); ii < sim_nsteps; ++ii) {
@@ -303,9 +299,6 @@ namespace tutsim {
 	state.position_ += sim_dt * state.velocity_;
 	model->update(state);
       }
-    }
-    else {
-      errx(EXIT_FAILURE, "invalid state %d", state_);
     }
     
     if (wall_time_ms >= gfx_next_ms) {
@@ -355,12 +348,7 @@ namespace tutsim {
   cb_toggle(Fl_Widget * widget, void * param)
   {
     Simulator * dd(reinterpret_cast<Simulator*>(param));
-    if (Simulator::SWAY == dd->state_) {
-      dd->state_ = Simulator::SERVO;
-    }
-    else {
-      dd->state_ = Simulator::SWAY;
-    }
+    ++dd->toggle_count_;
   }
   
   

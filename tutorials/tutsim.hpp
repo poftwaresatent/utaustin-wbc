@@ -40,9 +40,10 @@ namespace tutsim {
 	  double servo_rate_hz,
 	  double sim_rate_hz,
 	  jspace::Model * model,
-	  void (*servo_cb)(double wall_time_ms,
+	  bool (*servo_cb)(size_t toggle_count,
+			   double wall_time_ms,
 			   double sim_time_ms,
-			   jspace::Model const & model,
+			   jspace::State const & state,
 			   jspace::Vector & command),
 	  int width, int height, char const * title);
   

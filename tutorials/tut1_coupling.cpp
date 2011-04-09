@@ -45,25 +45,33 @@ static bool servo_cb(size_t toggle_count,
 		     jspace::State const & state,
 		     jspace::Vector & command)
 {
-  static size_t counter(0);
-  if (0 == (counter % 50)) {
-    std::cerr << "wall: " << wall_time_ms << "  sim: " << sim_time_ms << "\n";
-    jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
-  }
-  ++counter;
-  
   if (0 == (toggle_count % 2)) {
-    jspace::State newstate(state);
-    for (int ii(0); ii < newstate.position_.rows(); ++ii) {
-      newstate.position_[ii] = 0.1 * sin(ii + 1e-3 * wall_time_ms);
-      newstate.velocity_[ii] = 0.05 * cos(ii + 1e-3 * wall_time_ms);
-      newstate.force_[ii] = 0.0;
+    command = -100.0 * state.position_ - 10.0 * state.velocity_;
+  }
+  else {
+    command = jspace::Vector::Zero(state.position_.rows());
+    int const idx(command.rows() - 2);
+    double dq_des(10.0);
+    if (fmod(sim_time_ms, 4e3) > 2e3) {
+      dq_des = -dq_des;
     }
-    model->update(newstate);
-    return false;
+    command[idx] = dq_des - state.velocity_[idx];
   }
   
-  command = jspace::Vector::Zero(model->getNDOF());
+  double const cmax(20.0);
+  for (int idx(0); idx < command.rows(); ++idx) {
+    if (command[idx] > cmax) {
+      command[idx] = cmax;
+    }
+    else if (command[idx] < -cmax) {
+      command[idx] = -cmax;
+    }
+  }
+  
+  std::cerr << "sim_time_ms: " << sim_time_ms << "\n";
+  jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
+  jspace::pretty_print(state.velocity_, std::cerr, "jvel", "  ");
+  jspace::pretty_print(command, std::cerr, "command", "  ");
   return true;
 }
 
@@ -82,5 +90,5 @@ int main(int argc, char ** argv)
   static int const win_width(300);
   static int const win_height(200);
   return tutsim::run(gfx_rate_hz, servo_rate_hz, sim_rate_hz,
-		     model.get(), servo_cb, win_width, win_height, "tutmain");
+		     model.get(), servo_cb, win_width, win_height, "tut1_coupling");
 }
