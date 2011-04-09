@@ -62,6 +62,10 @@ namespace tutsim {
     static void timer_cb(void * param);
     
     enum {
+      SWAY, FALL
+    } state_;
+    
+    enum {
       A1, A2, A3, L1, L2, L3, R1, R2, R3, NDOF
     };
     
@@ -77,8 +81,10 @@ namespace tutsim {
     virtual void resize(int x, int y, int w, int h);
     
     Drawing * drawing;
+    Fl_Button * toggle;
     Fl_Button * quit;
     
+    static void cb_toggle(Fl_Widget * widget, void * param);
     static void cb_quit(Fl_Widget * widget, void * param);
   };
   
@@ -93,16 +99,11 @@ static size_t ndof;
 
 int main(int argc, char ** argv)
 {
-  try {
-    model.reset(jspace::test::parse_sai_xml_file(model_filename, false));
-    ndof = model->getNDOF();
-    state.init(ndof, ndof, ndof);
-    tutsim::Window win(300, 200, "tutsim");
-    return Fl::run();
-  }
-  catch (std::runtime_error const & ee) {
-    errx(EXIT_FAILURE, "EXCEPTION: %s", ee.what());
-  }
+  model.reset(jspace::test::parse_sai_xml_file(model_filename, true));
+  ndof = model->getNDOF();
+  state.init(ndof, ndof, ndof);
+  tutsim::Window win(300, 200, "tutsim");
+  return Fl::run();
 }
 
 
@@ -110,7 +111,8 @@ namespace tutsim {
   
   Drawing::
   Drawing(int xx, int yy, int width, int height, const char * label)
-    : Fl_Widget(xx, yy, width, height, label)
+    : Fl_Widget(xx, yy, width, height, label),
+      state_(SWAY)
   {
     node_[0] = 0;
   }
@@ -130,7 +132,7 @@ namespace tutsim {
   {
     if ( ! node_[0]) {
       if (0 != gettimeofday(&tstart_, 0)) {
-	throw std::runtime_error("gettimofday failed");
+	errx(EXIT_FAILURE, "gettimofday failed");
       }
       Fl::add_timeout(0.5, timer_cb, this);
       node_[A1] = model->getNodeByName("a1");
@@ -144,7 +146,7 @@ namespace tutsim {
       node_[R3] = model->getNodeByName("r3");
       for (size_t ii(0); ii < NDOF; ++ii) {
 	if ( ! node_[ii]) {
-	  throw std::runtime_error("tutsim::Drawing::draw(): missing node");
+	  errx(EXIT_FAILURE, "tutsim::Drawing::draw(): missing node");
 	}
       }
     }
@@ -220,19 +222,42 @@ namespace tutsim {
   void Drawing::
   tick()
   {
-    struct timeval now;
-    if (0 != gettimeofday(&now, 0)) {
-      throw std::runtime_error("gettimofday failed");
+    if (SWAY == state_) {
+      struct timeval now;
+      if (0 != gettimeofday(&now, 0)) {
+	errx(EXIT_FAILURE, "gettimofday failed");
+      }
+      double const tt((tstart_.tv_sec - now.tv_sec) + 1e-6 * (tstart_.tv_usec - now.tv_usec));
+      for (size_t ii(0); ii < ndof; ++ii) {
+	state.position_[ii] = 0.1 * sin(ii + tt);
+	state.velocity_[ii] = 0.05 * cos(ii + tt);
+	state.force_[ii] = 0.0;
+      }
+      ////    jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
+      model->update(state);
     }
-    double const tt((tstart_.tv_sec - now.tv_sec) + 1e-6 * (tstart_.tv_usec - now.tv_usec));
-    for (size_t ii(0); ii < ndof; ++ii) {
-      state.position_[ii] = 0.1 * sin(ii + tt);
-      state.velocity_[ii] = 0.05 * cos(ii + tt);
-      state.force_[ii] = 0.0;
+    else if (FALL == state_) {
+      jspace::Matrix ainv;
+      jspace::Vector gg, bb, ddq;
+      for (size_t ii(0); ii < 10; ++ii) {
+	if ( ! model->getInverseMassInertia(ainv)) {
+	  errx(EXIT_FAILURE, "model->getInverseMassInertia() failed");
+	}
+	if ( ! model->getGravity(gg)) {
+	  errx(EXIT_FAILURE, "model->getGravity() failed");
+	}
+	if ( ! model->getCoriolisCentrifugal(bb)) {
+	  errx(EXIT_FAILURE, "model->getCoriolisCentrifugal() failed");
+	}
+	ddq = ainv * (-bb - gg);
+	state.velocity_ += 0.005 * ddq;
+	state.position_ += 0.005 * state.velocity_;
+	model->update(state);
+      }
     }
-    ////    jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
-    model->update(state);
-    ////    damage(FL_DAMAGE_USER1);
+    else {
+      errx(EXIT_FAILURE, "invalid state %d", state_);
+    }
     redraw();
   }
   
@@ -251,7 +276,9 @@ namespace tutsim {
   {
     begin();
     drawing = new Drawing(0, 0, width, height - 40);
-    quit = new Fl_Button(width / 2 - 40, height - 35, 100, 30, "&Quit");
+    toggle = new Fl_Button(5, height - 35, 100, 30, "&Toggle");
+    toggle->callback(cb_toggle, drawing);
+    quit = new Fl_Button(width - 105, height - 35, 100, 30, "&Quit");
     quit->callback(cb_quit, this);
     end();
     resizable(this);
@@ -264,9 +291,21 @@ namespace tutsim {
   {
     Fl_Window::resize(x, y, w, h);
     drawing->resize(0, 0, w, h - 40);
-    ////    drawing->redraw();
-    quit->resize(w/2 - 40, h-35, 100, 30);
-    ////    quit->redraw();
+    toggle->resize(5, h-35, 100, 30);
+    quit->resize(w-105, h-35, 100, 30);
+  }
+  
+  
+  void Window::
+  cb_toggle(Fl_Widget * widget, void * param)
+  {
+    Drawing * dd(reinterpret_cast<Drawing*>(param));
+    if (Drawing::SWAY == dd->state_) {
+      dd->state_ = Drawing::FALL;
+    }
+    else {
+      dd->state_ = Drawing::SWAY;
+    }
   }
   
   
