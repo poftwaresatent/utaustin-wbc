@@ -55,10 +55,10 @@ namespace tutsim {
   public:
     Drawing(int xx, int yy, int width, int height, const char * label = 0);
     virtual ~Drawing();
-    void tick();
     
-  protected:
     virtual void draw();
+    
+    void tick();
     static void timer_cb(void * param);
     
     enum {
@@ -74,10 +74,11 @@ namespace tutsim {
   public:
     Window(int width, int height, const char * title);
     
+    virtual void resize(int x, int y, int w, int h);
+    
     Drawing * drawing;
     Fl_Button * quit;
     
-  private:
     static void cb_quit(Fl_Widget * widget, void * param);
   };
   
@@ -231,7 +232,8 @@ namespace tutsim {
     }
     ////    jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
     model->update(state);
-    damage(FL_DAMAGE_USER1);
+    ////    damage(FL_DAMAGE_USER1);
+    redraw();
   }
   
   
@@ -248,12 +250,23 @@ namespace tutsim {
     : Fl_Window(width, height, title)
   {
     begin();
-    drawing = new Drawing(0, 0, width, height - 50);
-    quit = new Fl_Button(width / 2 - 50, height - 40, 100, 30, "&Quit");
+    drawing = new Drawing(0, 0, width, height - 40);
+    quit = new Fl_Button(width / 2 - 40, height - 35, 100, 30, "&Quit");
     quit->callback(cb_quit, this);
     end();
     resizable(this);
     show();
+  }
+  
+  
+  void Window::
+  resize(int x, int y, int w, int h)
+  {
+    Fl_Window::resize(x, y, w, h);
+    drawing->resize(0, 0, w, h - 40);
+    ////    drawing->redraw();
+    quit->resize(w/2 - 40, h-35, 100, 30);
+    ////    quit->redraw();
   }
   
   
