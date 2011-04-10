@@ -107,8 +107,9 @@ namespace tutsim {
   {
     for (size_t ii(0); ii < ndof; ++ii) {
       taoJoint * joint(tao_tree->info[ii].joint);
-      joint->setQ(&(state.position_.coeffRef(ii)));
-      joint->setDQ(&(state.velocity_.coeffRef(ii)));
+      int const kk(tao_tree->info[ii].id);
+      joint->setQ(&(state.position_.coeffRef(kk)));
+      joint->setDQ(&(state.velocity_.coeffRef(kk)));
       joint->zeroDDQ();
       joint->zeroTau();
     }
@@ -120,23 +121,12 @@ namespace tutsim {
   {
     for (size_t ii(0); ii < ndof; ++ii) {
       taoJoint * joint(tao_tree->info[ii].joint);
-      joint->getQ(&(state.position_.coeffRef(ii)));
-      joint->getDQ(&(state.velocity_.coeffRef(ii)));
-      joint->getTau(&(state.force_.coeffRef(ii)));
+      int const kk(tao_tree->info[ii].id);
+      joint->getQ(&(state.position_.coeffRef(kk)));
+      joint->getDQ(&(state.velocity_.coeffRef(kk)));
+      joint->getTau(&(state.force_.coeffRef(kk)));
     }
   }
-  
-  
-  // static void add_command_to_tao_tree(jspace::Vector const & command)
-  // {
-  //   double jtau;
-  //   for (size_t ii(0); ii < ndof; ++ii) {
-  //     taoJoint * joint(tao_tree->info[ii].joint);
-  //     joint->getTau(&jtau);
-  //     jtau += command[ii];
-  //     joint->setTau(&jtau);
-  //   }
-  // }
   
   
   int run(double _gfx_rate_hz,
@@ -343,13 +333,13 @@ namespace tutsim {
       jspace::Vector ddq(ndof);
       for (size_t ii(0); ii < sim_nsteps; ++ii) {
 	static deVector3 earth_gravity(0.0, 0.0, -9.81);
-	for (size_t ii(0); ii < ndof; ++ii) {
-	  ////	  tao_tree->info[ii].joint->zeroTau();
-	  tao_tree->info[ii].joint->setTau(&(command.coeffRef(ii)));
+	for (size_t kk(0); kk < ndof; ++kk) {
+	  // is this necessary each kk?
+	  tao_tree->info[kk].joint->setTau(&(command.coeffRef(tao_tree->info[kk].id)));
 	}
 	taoDynamics::fwdDynamics(tao_tree->root, &earth_gravity);
-	for (size_t ii(0); ii < ndof; ++ii) {
-	  tao_tree->info[ii].joint->getDDQ(&(ddq.coeffRef(ii)));
+	for (size_t kk(0); kk < ndof; ++kk) {
+	  tao_tree->info[kk].joint->getDDQ(&(ddq.coeffRef(tao_tree->info[kk].id)));
 	}
 	////	add_command_to_tao_tree(command);
 	////	taoDynamics::integrate(tao_tree->root, sim_dt);
