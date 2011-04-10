@@ -42,7 +42,7 @@ static boost::shared_ptr<jspace::Model> model;
 static bool servo_cb(size_t toggle_count,
 		     double wall_time_ms,
 		     double sim_time_ms,
-		     jspace::State const & state,
+		     jspace::State & state,
 		     jspace::Vector & command)
 {
   static size_t counter(0);
@@ -53,13 +53,11 @@ static bool servo_cb(size_t toggle_count,
   ++counter;
   
   if (0 == (toggle_count % 2)) {
-    jspace::State newstate(state);
-    for (int ii(0); ii < newstate.position_.rows(); ++ii) {
-      newstate.position_[ii] = 0.1 * sin(ii + 1e-3 * wall_time_ms);
-      newstate.velocity_[ii] = 0.05 * cos(ii + 1e-3 * wall_time_ms);
-      newstate.force_[ii] = 0.0;
+    static double const aa(M_PI / 2);
+    for (int ii(0); ii < state.position_.rows(); ++ii) {
+      state.position_[ii] = aa * sin((1.0 + 0.1 * ii) * 1e-3 * wall_time_ms);
+      state.velocity_[ii] = 0.0;
     }
-    model->update(newstate);
     return false;
   }
   
@@ -82,5 +80,6 @@ int main(int argc, char ** argv)
   static int const win_width(300);
   static int const win_height(200);
   return tutsim::run(gfx_rate_hz, servo_rate_hz, sim_rate_hz,
-		     model.get(), servo_cb, win_width, win_height, "tutmain");
+		     model_filename, servo_cb, win_width, win_height,
+		     "tutmain");
 }

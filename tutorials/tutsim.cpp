@@ -31,11 +31,18 @@
 
 #include "tutsim.hpp"
 
-#include <jspace/Model.hpp>
-#include <tao/dynamics/taoDNode.h>
+#include <jspace/test/sai_brep_parser.hpp>
+#include <jspace/test/sai_brep.hpp>
+
+#include <tao/dynamics/taoNode.h>
+#include <tao/dynamics/taoJoint.h>
+#include <tao/dynamics/taoDynamics.h>
+#include <tao/dynamics/taoVar.h>
 #include <tao/matrix/TaoDeMath.h>
 #include <tao/matrix/TaoDeQuaternion.h>
 #include <tao/matrix/TaoDeFrame.h>
+
+#include <boost/shared_ptr.hpp>
 
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
@@ -83,11 +90,11 @@ namespace tutsim {
   };
   
   
-  static jspace::Model * model;
+  static boost::shared_ptr<jspace::tao_tree_info_s> tao_tree;
   static bool (*servo_cb)(size_t toggle_count,
 			  double wall_time_ms,
 			  double sim_time_ms,
-			  jspace::State const & state,
+			  jspace::State & state,
 			  jspace::Vector & command);
   static jspace::State state;
   static size_t ndof;
@@ -96,14 +103,50 @@ namespace tutsim {
   static double sim_rate_hz;
   
   
+  static void write_state_to_tao_tree()
+  {
+    for (size_t ii(0); ii < ndof; ++ii) {
+      taoJoint * joint(tao_tree->info[ii].joint);
+      joint->setQ(&(state.position_.coeffRef(ii)));
+      joint->setDQ(&(state.velocity_.coeffRef(ii)));
+      joint->zeroDDQ();
+      joint->zeroTau();
+    }
+    taoDynamics::updateTransformation(tao_tree->root);
+  }
+  
+  
+  static void read_state_from_tao_tree()
+  {
+    for (size_t ii(0); ii < ndof; ++ii) {
+      taoJoint * joint(tao_tree->info[ii].joint);
+      joint->getQ(&(state.position_.coeffRef(ii)));
+      joint->getDQ(&(state.velocity_.coeffRef(ii)));
+      joint->getTau(&(state.force_.coeffRef(ii)));
+    }
+  }
+  
+  
+  // static void add_command_to_tao_tree(jspace::Vector const & command)
+  // {
+  //   double jtau;
+  //   for (size_t ii(0); ii < ndof; ++ii) {
+  //     taoJoint * joint(tao_tree->info[ii].joint);
+  //     joint->getTau(&jtau);
+  //     jtau += command[ii];
+  //     joint->setTau(&jtau);
+  //   }
+  // }
+  
+  
   int run(double _gfx_rate_hz,
 	  double _servo_rate_hz,
 	  double _sim_rate_hz,
-	  jspace::Model * _model,
+	  std::string const & robot_filename,
 	  bool (*_servo_cb)(size_t toggle_count,
 			    double wall_time_ms,
 			    double sim_time_ms,
-			    jspace::State const & state,
+			    jspace::State & state,
 			    jspace::Vector & command),
 	  int width, int height, char const * title)
   {
@@ -113,14 +156,23 @@ namespace tutsim {
     if (_servo_rate_hz <= 0.0) {
       errx(EXIT_FAILURE, "invalid servo_rate_hz %g (must be > 0)", _servo_rate_hz);
     }
+    
+    try {
+      jspace::test::BRParser brp;
+      jspace::test::BranchingRepresentation * brep(brp.parse(robot_filename));
+      tao_tree.reset(brep->createTreeInfo());
+    }
+    catch (std::runtime_error const & ee) {
+      errx(EXIT_FAILURE, "%s", ee.what());
+    }
+    
     gfx_rate_hz = _gfx_rate_hz;
     servo_rate_hz = _servo_rate_hz;
     sim_rate_hz = _sim_rate_hz;
-    model = _model;
     servo_cb = _servo_cb;
-    ndof = model->getNDOF();
+    ndof = tao_tree->info.size();
     state.init(ndof, ndof, ndof);
-    model->update(state);
+    write_state_to_tao_tree();
     Window win(width, height, title);
     return Fl::run();
   }
@@ -144,25 +196,31 @@ namespace tutsim {
   }
   
   
+  static taoDNode * find_node(std::string const & name)
+  {
+    for (size_t ii(0); ii < ndof; ++ii) {
+      if (name == tao_tree->info[ii].link_name) {
+	return  tao_tree->info[ii].node;
+      }
+    }
+    errx(EXIT_FAILURE, "node `%s' not found", name.c_str());
+  }
+  
+  
   void Simulator::
   draw()
   {
     if ( ! node_[0]) {
       Fl::add_timeout(0.1, timer_cb, this);
-      node_[A1] = model->getNodeByName("a1");
-      node_[A2] = model->getNodeByName("a2");
-      node_[A3] = model->getNodeByName("a3");
-      node_[L1] = model->getNodeByName("l1");
-      node_[L2] = model->getNodeByName("l2");
-      node_[L3] = model->getNodeByName("l3");
-      node_[R1] = model->getNodeByName("r1");
-      node_[R2] = model->getNodeByName("r2");
-      node_[R3] = model->getNodeByName("r3");
-      for (size_t ii(0); ii < NDOF; ++ii) {
-	if ( ! node_[ii]) {
-	  errx(EXIT_FAILURE, "tutsim::Simulator::draw(): missing node");
-	}
-      }
+      node_[A1] = find_node("a1");
+      node_[A2] = find_node("a2");
+      node_[A3] = find_node("a3");
+      node_[L1] = find_node("l1");
+      node_[L2] = find_node("l2");
+      node_[L3] = find_node("l3");
+      node_[R1] = find_node("r1");
+      node_[R2] = find_node("r2");
+      node_[R3] = find_node("r3");
     }
     
     double scale;
@@ -274,30 +332,31 @@ namespace tutsim {
     }
     
     jspace::Vector command;
+    read_state_from_tao_tree();
     if ( ! servo_cb(toggle_count_, wall_time_ms, sim_time_ms, state, command)) {
-      state = model->getState();
+      write_state_to_tao_tree();
     }
     else {
       if (command.rows() != ndof) {
 	errx(EXIT_FAILURE, "invalid command dimension %d (should be %zu)", command.rows(), ndof);
       }
-      state.force_ = command;	// could ramp it or clamp it or...
-      jspace::Matrix ainv;
-      jspace::Vector gg, bb, ddq;
+      jspace::Vector ddq(ndof);
       for (size_t ii(0); ii < sim_nsteps; ++ii) {
-	if ( ! model->getInverseMassInertia(ainv)) {
-	  errx(EXIT_FAILURE, "model->getInverseMassInertia() failed");
+	static deVector3 earth_gravity(0.0, 0.0, -9.81);
+	for (size_t ii(0); ii < ndof; ++ii) {
+	  ////	  tao_tree->info[ii].joint->zeroTau();
+	  tao_tree->info[ii].joint->setTau(&(command.coeffRef(ii)));
 	}
-	if ( ! model->getGravity(gg)) {
-	  errx(EXIT_FAILURE, "model->getGravity() failed");
+	taoDynamics::fwdDynamics(tao_tree->root, &earth_gravity);
+	for (size_t ii(0); ii < ndof; ++ii) {
+	  tao_tree->info[ii].joint->getDDQ(&(ddq.coeffRef(ii)));
 	}
-	if ( ! model->getCoriolisCentrifugal(bb)) {
-	  errx(EXIT_FAILURE, "model->getCoriolisCentrifugal() failed");
-	}
-	ddq = ainv * (state.force_ - bb - gg);
+	////	add_command_to_tao_tree(command);
+	////	taoDynamics::integrate(tao_tree->root, sim_dt);
+	////	taoDynamics::updateTransformation(tao_tree->root);
 	state.velocity_ += sim_dt * ddq;
 	state.position_ += sim_dt * state.velocity_;
-	model->update(state);
+	write_state_to_tao_tree();
       }
     }
     
