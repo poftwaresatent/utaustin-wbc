@@ -12,11 +12,11 @@ include (FindFLTK)
 
 add_library (tut STATIC tutsim.cpp)
 
-add_executable (tutmain tutmain.cpp)
-target_link_libraries (tutmain tut opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
+add_executable (tut00_test tut00_test.cpp)
+target_link_libraries (tut00_test tut opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
 
-add_executable (tut1_coupling tut1_coupling.cpp)
-target_link_libraries (tut1_coupling tut opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
+add_executable (tut01_joint_coupling tut01_joint_coupling.cpp)
+target_link_libraries (tut01_joint_coupling tut opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
 
 add_executable (tut02_jtask tut02_jtask.cpp)
 target_link_libraries (tut02_jtask tut opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
