@@ -53,7 +53,16 @@
 #include <sys/time.h>
 
 
-namespace tutsim {
+static char const * robot_filename(TUTROB_XML_PATH_STR);
+static double gfx_rate_hz(20.0);
+static double servo_rate_hz(400.0);
+static double sim_rate_hz(1600.0);
+static int win_width(300);
+static int win_height(200);
+static char const * win_title("utaustin-wbc tutorial");
+
+
+namespace {
   
   
   class Simulator : public Fl_Widget {
@@ -98,9 +107,6 @@ namespace tutsim {
 			  jspace::Vector & command);
   static jspace::State state;
   static size_t ndof;
-  static double gfx_rate_hz;
-  static double servo_rate_hz;
-  static double sim_rate_hz;
   
   
   static void write_state_to_tao_tree()
@@ -126,45 +132,6 @@ namespace tutsim {
       joint->getDQ(&(state.velocity_.coeffRef(kk)));
       joint->getTau(&(state.force_.coeffRef(kk)));
     }
-  }
-  
-  
-  int run(double _gfx_rate_hz,
-	  double _servo_rate_hz,
-	  double _sim_rate_hz,
-	  std::string const & robot_filename,
-	  bool (*_servo_cb)(size_t toggle_count,
-			    double wall_time_ms,
-			    double sim_time_ms,
-			    jspace::State & state,
-			    jspace::Vector & command),
-	  int width, int height, char const * title)
-  {
-    if (_gfx_rate_hz <= 0.0) {
-      errx(EXIT_FAILURE, "invalid gfx_rate_hz %g (must be > 0)", _gfx_rate_hz);
-    }
-    if (_servo_rate_hz <= 0.0) {
-      errx(EXIT_FAILURE, "invalid servo_rate_hz %g (must be > 0)", _servo_rate_hz);
-    }
-    
-    try {
-      jspace::test::BRParser brp;
-      jspace::test::BranchingRepresentation * brep(brp.parse(robot_filename));
-      tao_tree.reset(brep->createTreeInfo());
-    }
-    catch (std::runtime_error const & ee) {
-      errx(EXIT_FAILURE, "%s", ee.what());
-    }
-    
-    gfx_rate_hz = _gfx_rate_hz;
-    servo_rate_hz = _servo_rate_hz;
-    sim_rate_hz = _sim_rate_hz;
-    servo_cb = _servo_cb;
-    ndof = tao_tree->info.size();
-    state.init(ndof, ndof, ndof);
-    write_state_to_tao_tree();
-    Window win(width, height, title);
-    return Fl::run();
   }
   
   
@@ -386,4 +353,64 @@ namespace tutsim {
     reinterpret_cast<Window*>(param)->hide();
   }
   
+}
+
+
+void tutsim::
+set_robot_filename(char const * _robot_filename)
+{
+  robot_filename = _robot_filename;
+}
+
+
+void tutsim::
+set_rates(double _gfx_rate_hz,
+	  double _servo_rate_hz,
+	  double _sim_rate_hz)
+{
+  gfx_rate_hz = _gfx_rate_hz;
+  servo_rate_hz = _servo_rate_hz;
+  sim_rate_hz = _sim_rate_hz;
+}
+
+
+void tutsim::
+set_window_params(int width, int height, char const * title)
+{
+  win_width = width;
+  win_height = height;
+  win_title = title;
+}
+
+
+int tutsim::
+run(bool (*_servo_cb)(size_t toggle_count,
+		      double wall_time_ms,
+		      double sim_time_ms,
+		      jspace::State & state,
+		      jspace::Vector & command))
+{
+  if (gfx_rate_hz <= 0.0) {
+    errx(EXIT_FAILURE, "invalid gfx_rate_hz %g (must be > 0)", gfx_rate_hz);
+  }
+  if (servo_rate_hz <= 0.0) {
+    errx(EXIT_FAILURE, "invalid servo_rate_hz %g (must be > 0)", servo_rate_hz);
+  }
+  
+  try {
+    jspace::test::BRParser brp;
+    jspace::test::BranchingRepresentation * brep(brp.parse(robot_filename));
+    tao_tree.reset(brep->createTreeInfo());
+  }
+  catch (std::runtime_error const & ee) {
+    errx(EXIT_FAILURE, "%s", ee.what());
+  }
+  
+  servo_cb = _servo_cb;
+  ndof = tao_tree->info.size();
+  state.init(ndof, ndof, ndof);
+  write_state_to_tao_tree();
+
+  Window win(win_width, win_height, win_title);
+  return Fl::run();
 }

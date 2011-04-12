@@ -30,13 +30,6 @@
  */
 
 #include "tutsim.hpp"
-#include <jspace/test/sai_util.hpp>
-#include <boost/shared_ptr.hpp>
-#include <err.h>
-
-
-static std::string model_filename("/rolo/soft/utaustin-wbc/tutorials/tutrob.xml");
-static boost::shared_ptr<jspace::Model> model;
 
 
 static bool servo_cb(size_t toggle_count,
@@ -78,18 +71,5 @@ static bool servo_cb(size_t toggle_count,
 
 int main(int argc, char ** argv)
 {
-  try {
-    model.reset(jspace::test::parse_sai_xml_file(model_filename, true));
-  }
-  catch (std::runtime_error const & ee) {
-    errx(EXIT_FAILURE, "%s", ee.what());
-  }
-  static double const gfx_rate_hz(20.0);
-  static double const servo_rate_hz(400.0);
-  static double const sim_rate_hz(1600.0);
-  static int const win_width(300);
-  static int const win_height(200);
-  return tutsim::run(gfx_rate_hz, servo_rate_hz, sim_rate_hz,
-		     model_filename, servo_cb, win_width, win_height,
-		     "tut1_coupling");
+  return tutsim::run(servo_cb);
 }

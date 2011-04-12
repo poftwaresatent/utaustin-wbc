@@ -35,7 +35,7 @@
 #include <err.h>
 
 
-static std::string model_filename("/rolo/soft/utaustin-wbc/tutorials/tutrob.xml");
+static std::string model_filename(TUTROB_XML_PATH_STR);
 static boost::shared_ptr<jspace::Model> model;
 
 
@@ -45,10 +45,18 @@ static bool servo_cb(size_t toggle_count,
 		     jspace::State & state,
 		     jspace::Vector & command)
 {
+  model->update(state);
+  jspace::Matrix mass_inertia;
+  model->getMassInertia(mass_inertia);
+  jspace::Vector gravity;
+  model->getGravity(gravity);
+  
   static size_t counter(0);
   if (0 == (counter % 50)) {
     std::cerr << "wall: " << wall_time_ms << "  sim: " << sim_time_ms << "\n";
     jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
+    jspace::pretty_print(mass_inertia, std::cerr, "mass_inertia", "  ");
+    jspace::pretty_print(gravity, std::cerr, "gravity", "  ");
   }
   ++counter;
   
@@ -61,7 +69,7 @@ static bool servo_cb(size_t toggle_count,
     return false;
   }
   
-  command = jspace::Vector::Zero(model->getNDOF());
+  command = jspace::Vector::Zero(state.position_.rows());
   return true;
 }
 
@@ -74,12 +82,5 @@ int main(int argc, char ** argv)
   catch (std::runtime_error const & ee) {
     errx(EXIT_FAILURE, "%s", ee.what());
   }
-  static double const gfx_rate_hz(20.0);
-  static double const servo_rate_hz(400.0);
-  static double const sim_rate_hz(1600.0);
-  static int const win_width(300);
-  static int const win_height(200);
-  return tutsim::run(gfx_rate_hz, servo_rate_hz, sim_rate_hz,
-		     model_filename, servo_cb, win_width, win_height,
-		     "tutmain");
+  return tutsim::run(servo_cb);
 }

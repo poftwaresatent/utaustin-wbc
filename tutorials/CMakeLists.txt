@@ -10,6 +10,8 @@ set (FLTK_SKIP_IMAGES ON)
 set (FLTK_SKIP_FLUID ON)
 include (FindFLTK)
 
+add_definitions (-DTUTROB_XML_PATH_STR="${CMAKE_CURRENT_SOURCE_DIR}/tutrob.xml")
+
 add_library (tut STATIC tutsim.cpp)
 
 add_executable (tut00_test tut00_test.cpp)

@@ -105,7 +105,7 @@ namespace tut02 {
 }
 
 
-static std::string model_filename("/rolo/soft/utaustin-wbc/tutorials/tutrob.xml");
+static std::string model_filename(TUTROB_XML_PATH_STR);
 static boost::shared_ptr<jspace::Model> model;
 static boost::shared_ptr<tut02::JTask> jtask;
 
@@ -123,9 +123,8 @@ static bool servo_cb(size_t toggle_count,
     //////////////////////////////////////////////////
     // Send torques that make the robot sway around.
     
-    command = jspace::Vector::Zero(state.position_.rows());
-    command[0] = 1e-3 * sin(1e-3 * sim_time_ms);
-    command[3] = 0.5 * command[0];
+    command = -3.0 * state.velocity_;
+    command[0] = 40.0 * sin(1e-3 * sim_time_ms);
     
   }
   else {
@@ -149,23 +148,6 @@ static bool servo_cb(size_t toggle_count,
   }
   
   prev_toggle = toggle_count;
-  
-  //////////////////////////////////////////////////
-  // Saturate command torques.
-  
-  static jspace::Vector cmax;
-  if (0 == cmax.rows()) {
-    cmax.resize(9);
-    cmax << 100, 80, 80, 50, 30, 20, 50, 30, 20;
-  }
-  for (int idx(0); idx < command.rows(); ++idx) {
-    if (command[idx] > cmax[idx]) {
-      command[idx] = cmax[idx];
-    }
-    else if (command[idx] < -cmax[idx]) {
-      command[idx] = -cmax[idx];
-    }
-  }
   
   //////////////////////////////////////////////////
   // Print debug info from time to time.
@@ -196,12 +178,5 @@ int main(int argc, char ** argv)
   catch (std::runtime_error const & ee) {
     errx(EXIT_FAILURE, "%s", ee.what());
   }
-  static double const gfx_rate_hz(20.0);
-  static double const servo_rate_hz(400.0);
-  static double const sim_rate_hz(1600.0);
-  static int const win_width(300);
-  static int const win_height(200);
-  return tutsim::run(gfx_rate_hz, servo_rate_hz, sim_rate_hz,
-		     model_filename, servo_cb, win_width, win_height,
-		     "tut1_coupling");
+  return tutsim::run(servo_cb);
 }
