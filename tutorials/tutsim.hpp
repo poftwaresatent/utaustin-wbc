@@ -83,6 +83,31 @@ struct tutsim {
   static void set_window_params(int width, int height, char const * title);
   
   /**
+     Draw the robot as if it were at the given joint
+     configuration. Uses the specified line width and color. To be
+     used from inside a function that you register with set_draw_cb(),
+     which gets the correct x0, y0, and scale passed to it..
+  */
+  static void draw_robot(jspace::Vector const & jpos, int width,
+			 unsigned char red, unsigned char green, unsigned char blue,
+			 double x0, double y0, double scale);
+  
+  /**
+     Set a custom function for drawing additional information. Use
+     e.g. draw_robot(), or you can emit raw fltk drawing commands. In
+     the latter case, you need to take into account the x0, y0, and
+     scale parameters, and keep in mind that fltk uses screen
+     coordinates where the Y-axis is pointing down.  For instance, if
+     you want to draw a line from (ax, ay) to (bx, by) you have to
+     say:
+     
+     \code
+     fl_line(x0 + ax * scale, y0 - ay * scale, x0 + bx * scale, y0 - by * scale);
+     \endcode
+  */
+  static void set_draw_cb(void (*draw_cb)(double x0, double y0, double scale));
+  
+  /**
      Sets up the planar tutorial simulator and runs it, calling the
      supplied function whenever the servo needs to be updated. Inside
      your callback, you can either override the state and return

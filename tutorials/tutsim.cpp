@@ -61,6 +61,25 @@ static double sim_rate_hz(1600.0);
 static int win_width(300);
 static int win_height(200);
 static char const * win_title("utaustin-wbc tutorial");
+static boost::shared_ptr<jspace::tao_tree_info_s> sim_tree;
+static boost::shared_ptr<jspace::tao_tree_info_s> scratch_tree;
+static int id1(-1);
+static int id2(-1);
+static int id3(-1);
+static int id4(-1);
+static jspace::State state;
+static size_t ndof;
+static size_t toggle_count(0);
+static double servo_dt_ms;
+
+
+static bool (*servo_cb)(size_t toggle_count,
+			double wall_time_ms,
+			double sim_time_ms,
+			jspace::State & state,
+			jspace::Vector & command);
+
+static void (*draw_cb)(double x0, double y0, double scale) = 0;
 
 
 namespace {
@@ -75,13 +94,6 @@ namespace {
     
     void tick();
     static void timer_cb(void * param);
-    
-    enum {
-      LINK1, LINK2, LINK3, LINK4, NDOF
-    };
-    
-    taoDNode const * node_[NDOF];
-    size_t toggle_count_;
   };
   
   
@@ -100,35 +112,37 @@ namespace {
   };
   
   
-  static boost::shared_ptr<jspace::tao_tree_info_s> tao_tree;
-  static bool (*servo_cb)(size_t toggle_count,
-			  double wall_time_ms,
-			  double sim_time_ms,
-			  jspace::State & state,
-			  jspace::Vector & command);
-  static jspace::State state;
-  static size_t ndof;
-  
-  
-  static void write_state_to_tao_tree()
+  static void write_state_to_tree(jspace::Vector const * jpos,
+				  jspace::Vector const * jvel,
+				  jspace::tao_tree_info_s & tree)
   {
     for (size_t ii(0); ii < ndof; ++ii) {
-      taoJoint * joint(tao_tree->info[ii].joint);
-      int const kk(tao_tree->info[ii].id);
-      joint->setQ(&(state.position_.coeffRef(kk)));
-      joint->setDQ(&(state.velocity_.coeffRef(kk)));
+      taoJoint * joint(tree.info[ii].joint);
+      int const kk(tree.info[ii].id);
+      if (jpos) {
+	joint->setQ(&(jpos->coeff(kk)));
+      }
+      if (jvel) {
+	joint->setDQ(&(jvel->coeff(kk)));
+      }
       joint->zeroDDQ();
       joint->zeroTau();
     }
-    taoDynamics::updateTransformation(tao_tree->root);
+    taoDynamics::updateTransformation(tree.root);
   }
   
   
-  static void read_state_from_tao_tree()
+  static void write_state_to_tree(jspace::tao_tree_info_s & tree)
+  {
+    write_state_to_tree(&(state.position_), &(state.velocity_), tree);
+  }
+  
+  
+  static void read_state_from_tree(jspace::tao_tree_info_s const & tree)
   {
     for (size_t ii(0); ii < ndof; ++ii) {
-      taoJoint * joint(tao_tree->info[ii].joint);
-      int const kk(tao_tree->info[ii].id);
+      taoJoint const * joint(tree.info[ii].joint);
+      int const kk(tree.info[ii].id);
       joint->getQ(&(state.position_.coeffRef(kk)));
       joint->getDQ(&(state.velocity_.coeffRef(kk)));
       joint->getTau(&(state.force_.coeffRef(kk)));
@@ -138,44 +152,86 @@ namespace {
   
   Simulator::
   Simulator(int xx, int yy, int width, int height, const char * label)
-    : Fl_Widget(xx, yy, width, height, label),
-      toggle_count_(0)
+    : Fl_Widget(xx, yy, width, height, label)
   {
-    node_[0] = 0;
+    Fl::add_timeout(0.1, timer_cb, this);
   }
   
   
   Simulator::
   ~Simulator()
   {
-    if (node_[0]) {
-      Fl::remove_timeout(timer_cb, this);
-    }
+    Fl::remove_timeout(timer_cb, this);
   }
   
   
-  static taoDNode * find_node(std::string const & name)
+  static taoDNode * find_node(jspace::tao_tree_info_s & tree, std::string const & name)
   {
     for (size_t ii(0); ii < ndof; ++ii) {
-      if (name == tao_tree->info[ii].link_name) {
-	return  tao_tree->info[ii].node;
+      if (name == tree.info[ii].link_name) {
+	return  tree.info[ii].node;
       }
     }
     errx(EXIT_FAILURE, "node `%s' not found", name.c_str());
   }
   
   
+  static void raw_draw_tree(jspace::tao_tree_info_s & tree, double x0, double y0, double scale)
+  {
+    if (0 > id1) {
+      id1 = find_node(*sim_tree, "link1")->getID();
+      id2 = find_node(*sim_tree, "link2")->getID();
+      id3 = find_node(*sim_tree, "link3")->getID();
+      id4 = find_node(*sim_tree, "link4")->getID();
+    }
+    
+    fl_line(x0 + (tree.info[id1].node->frameGlobal()->translation()[1] * scale),
+	    y0 - (tree.info[id1].node->frameGlobal()->translation()[2] * scale),
+	    x0 + (tree.info[id2].node->frameGlobal()->translation()[1] * scale),
+	    y0 - (tree.info[id2].node->frameGlobal()->translation()[2] * scale));
+    fl_line(x0 + (tree.info[id2].node->frameGlobal()->translation()[1] * scale),
+	    y0 - (tree.info[id2].node->frameGlobal()->translation()[2] * scale),
+	    x0 + (tree.info[id3].node->frameGlobal()->translation()[1] * scale),
+	    y0 - (tree.info[id3].node->frameGlobal()->translation()[2] * scale));
+    fl_line(x0 + (tree.info[id3].node->frameGlobal()->translation()[1] * scale),
+	    y0 - (tree.info[id3].node->frameGlobal()->translation()[2] * scale),
+	    x0 + (tree.info[id4].node->frameGlobal()->translation()[1] * scale),
+	    y0 - (tree.info[id4].node->frameGlobal()->translation()[2] * scale));
+    deFrame locframe;
+    locframe.translation()[2] = -1.0;
+    deFrame globframe;
+    globframe.multiply(*(tree.info[id4].node->frameGlobal()), locframe);
+    fl_line(x0 + (tree.info[id4].node->frameGlobal()->translation()[1] * scale),
+	    y0 - (tree.info[id4].node->frameGlobal()->translation()[2] * scale),
+	    x0 + (globframe.translation()[1] * scale),
+	    y0 - (globframe.translation()[2] * scale));
+  }
+  
+  
+  static void raw_draw_com(jspace::tao_tree_info_s & tree, double x0, double y0, double scale)
+  {
+    if ( ! id1) {
+      id1 = find_node(*sim_tree, "link1")->getID();
+      id2 = find_node(*sim_tree, "link2")->getID();
+      id3 = find_node(*sim_tree, "link3")->getID();
+      id4 = find_node(*sim_tree, "link4")->getID();
+    }
+    
+    deVector3 globpoint;
+    globpoint.multiply(*(tree.info[id1].node->frameGlobal()), *(tree.info[id1].node->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+    globpoint.multiply(*(tree.info[id2].node->frameGlobal()), *(tree.info[id2].node->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+    globpoint.multiply(*(tree.info[id3].node->frameGlobal()), *(tree.info[id3].node->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+    globpoint.multiply(*(tree.info[id4].node->frameGlobal()), *(tree.info[id4].node->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+  }
+  
+  
   void Simulator::
   draw()
   {
-    if ( ! node_[0]) {
-      Fl::add_timeout(0.1, timer_cb, this);
-      node_[LINK1] = find_node("link1");
-      node_[LINK2] = find_node("link2");
-      node_[LINK3] = find_node("link3");
-      node_[LINK4] = find_node("link4");
-    }
-    
     double scale;
     if (w() > h()) {
       scale = h() / 9.0;
@@ -191,44 +247,17 @@ namespace {
     
     fl_color(FL_WHITE);
     fl_line_style(FL_SOLID, 3, 0);
-    
-    fl_line(x0 + (node_[LINK1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[LINK1]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[LINK2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[LINK2]->frameGlobal()->translation()[2] * scale));
-    fl_line(x0 + (node_[LINK2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[LINK2]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[LINK3]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[LINK3]->frameGlobal()->translation()[2] * scale));
-    fl_line(x0 + (node_[LINK3]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[LINK3]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[LINK4]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[LINK4]->frameGlobal()->translation()[2] * scale));
-    deFrame locframe;
-    locframe.translation()[2] = -1.0;
-    deFrame globframe;
-    globframe.multiply(*(node_[LINK4]->frameGlobal()), locframe);
-    fl_line(x0 + (node_[LINK4]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[LINK4]->frameGlobal()->translation()[2] * scale),
-	    x0 + (globframe.translation()[1] * scale),
-	    y0 - (globframe.translation()[2] * scale));
+    raw_draw_tree(*sim_tree, x0, y0, scale);
     
     fl_color(FL_GREEN);
-    deVector3 globpoint;
-    globpoint.multiply(*(node_[LINK1]->frameGlobal()), *(node_[LINK1]->center()));
-    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
-    globpoint.multiply(*(node_[LINK2]->frameGlobal()), *(node_[LINK2]->center()));
-    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
-    globpoint.multiply(*(node_[LINK3]->frameGlobal()), *(node_[LINK3]->center()));
-    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
-    globpoint.multiply(*(node_[LINK4]->frameGlobal()), *(node_[LINK4]->center()));
-    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
-
-    fl_line_style(FL_SOLID, 1, 0);
+    raw_draw_com(*sim_tree, x0, y0, scale);
+    
+    if (draw_cb) {
+      draw_cb(x0, y0, scale);
+    }
+    
+    fl_line_style(0);		// back to default
   }
-  
-  
-  static double servo_dt_ms;
   
   
   void Simulator::
@@ -269,9 +298,9 @@ namespace {
     }
     
     jspace::Vector command;
-    read_state_from_tao_tree();
-    if ( ! servo_cb(toggle_count_, wall_time_ms, sim_time_ms, state, command)) {
-      write_state_to_tao_tree();
+    read_state_from_tree(*sim_tree);
+    if ( ! servo_cb(toggle_count, wall_time_ms, sim_time_ms, state, command)) {
+      write_state_to_tree(*sim_tree);
     }
     else {
       if (command.rows() != ndof) {
@@ -282,18 +311,18 @@ namespace {
 	static deVector3 earth_gravity(0.0, 0.0, -9.81);
 	for (size_t kk(0); kk < ndof; ++kk) {
 	  // is this necessary each kk?
-	  tao_tree->info[kk].joint->setTau(&(command.coeffRef(tao_tree->info[kk].id)));
+	  sim_tree->info[kk].joint->setTau(&(command.coeffRef(sim_tree->info[kk].id)));
 	}
-	taoDynamics::fwdDynamics(tao_tree->root, &earth_gravity);
+	taoDynamics::fwdDynamics(sim_tree->root, &earth_gravity);
 	for (size_t kk(0); kk < ndof; ++kk) {
-	  tao_tree->info[kk].joint->getDDQ(&(ddq.coeffRef(tao_tree->info[kk].id)));
+	  sim_tree->info[kk].joint->getDDQ(&(ddq.coeffRef(sim_tree->info[kk].id)));
 	}
-	////	add_command_to_tao_tree(command);
-	////	taoDynamics::integrate(tao_tree->root, sim_dt);
-	////	taoDynamics::updateTransformation(tao_tree->root);
+	////	add_command_to_sim_tree(command);
+	////	taoDynamics::integrate(sim_tree->root, sim_dt);
+	////	taoDynamics::updateTransformation(sim_tree->root);
 	state.velocity_ += sim_dt * ddq;
 	state.position_ += sim_dt * state.velocity_;
-	write_state_to_tao_tree();
+	write_state_to_tree(*sim_tree);
       }
     }
     
@@ -321,7 +350,7 @@ namespace {
     begin();
     simulator = new Simulator(0, 0, width, height - 40);
     toggle = new Fl_Button(5, height - 35, 100, 30, "&Toggle");
-    toggle->callback(cb_toggle, simulator);
+    toggle->callback(cb_toggle);
     quit = new Fl_Button(width - 105, height - 35, 100, 30, "&Quit");
     quit->callback(cb_quit, this);
     end();
@@ -343,8 +372,7 @@ namespace {
   void Window::
   cb_toggle(Fl_Widget * widget, void * param)
   {
-    Simulator * dd(reinterpret_cast<Simulator*>(param));
-    ++dd->toggle_count_;
+    ++toggle_count;
   }
   
   
@@ -384,6 +412,26 @@ set_window_params(int width, int height, char const * title)
 }
 
 
+void tutsim::
+draw_robot(jspace::Vector const & jpos, int width,
+	   unsigned char red, unsigned char green, unsigned char blue,
+	   double x0, double y0, double scale)
+{
+  write_state_to_tree(&jpos, 0, *scratch_tree);
+  fl_color(red, green, blue);
+  fl_line_style(FL_SOLID, width, 0);
+  raw_draw_tree(*scratch_tree, x0, y0, scale);
+  fl_line_style(0);		// back to default
+}
+
+
+void tutsim::
+set_draw_cb(void (*_draw_cb)(double x0, double y0, double scale))
+{
+  draw_cb = _draw_cb;
+}
+
+
 int tutsim::
 run(bool (*_servo_cb)(size_t toggle_count,
 		      double wall_time_ms,
@@ -400,18 +448,20 @@ run(bool (*_servo_cb)(size_t toggle_count,
   
   try {
     jspace::test::BRParser brp;
-    jspace::test::BranchingRepresentation * brep(brp.parse(robot_filename));
-    tao_tree.reset(brep->createTreeInfo());
+    boost::shared_ptr<jspace::test::BranchingRepresentation> brep(brp.parse(robot_filename));
+    sim_tree.reset(brep->createTreeInfo());
+    brep.reset(brp.parse(robot_filename));
+    scratch_tree.reset(brep->createTreeInfo());
   }
   catch (std::runtime_error const & ee) {
     errx(EXIT_FAILURE, "%s", ee.what());
   }
   
   servo_cb = _servo_cb;
-  ndof = tao_tree->info.size();
+  ndof = sim_tree->info.size();
   state.init(ndof, ndof, ndof);
-  write_state_to_tao_tree();
-
+  write_state_to_tree(*sim_tree);
+  
   Window win(win_width, win_height, win_title);
   return Fl::run();
 }

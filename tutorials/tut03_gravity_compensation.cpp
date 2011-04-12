@@ -193,6 +193,14 @@ static bool servo_cb(size_t toggle_count,
 }
 
 
+static void draw_cb(double x0, double y0, double scale)
+{
+  if (0 != jtask->goal_.rows()) {
+    tutsim::draw_robot(jtask->goal_, 1, 100, 80, 80, x0, y0, scale);
+  }
+}
+
+
 int main(int argc, char ** argv)
 {
   try {
@@ -202,5 +210,6 @@ int main(int argc, char ** argv)
   catch (std::runtime_error const & ee) {
     errx(EXIT_FAILURE, "%s", ee.what());
   }
+  tutsim::set_draw_cb(draw_cb);
   return tutsim::run(servo_cb);
 }
