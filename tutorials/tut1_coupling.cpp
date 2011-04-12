@@ -42,7 +42,7 @@ static boost::shared_ptr<jspace::Model> model;
 static bool servo_cb(size_t toggle_count,
 		     double wall_time_ms,
 		     double sim_time_ms,
-		     jspace::State const & state,
+		     jspace::State & state,
 		     jspace::Vector & command)
 {
   if (0 == (toggle_count % 2)) {
@@ -50,7 +50,7 @@ static bool servo_cb(size_t toggle_count,
   }
   else {
     command = jspace::Vector::Zero(state.position_.rows());
-    int const idx(command.rows() - 2);
+    int const idx(command.rows() - 1);
     double dq_des(10.0);
     if (fmod(sim_time_ms, 4e3) > 2e3) {
       dq_des = -dq_des;
@@ -90,5 +90,6 @@ int main(int argc, char ** argv)
   static int const win_width(300);
   static int const win_height(200);
   return tutsim::run(gfx_rate_hz, servo_rate_hz, sim_rate_hz,
-		     model.get(), servo_cb, win_width, win_height, "tut1_coupling");
+		     model_filename, servo_cb, win_width, win_height,
+		     "tut1_coupling");
 }

@@ -31,11 +31,18 @@
 
 #include "tutsim.hpp"
 
-#include <jspace/Model.hpp>
-#include <tao/dynamics/taoDNode.h>
+#include <jspace/test/sai_brep_parser.hpp>
+#include <jspace/test/sai_brep.hpp>
+
+#include <tao/dynamics/taoNode.h>
+#include <tao/dynamics/taoJoint.h>
+#include <tao/dynamics/taoDynamics.h>
+#include <tao/dynamics/taoVar.h>
 #include <tao/matrix/TaoDeMath.h>
 #include <tao/matrix/TaoDeQuaternion.h>
 #include <tao/matrix/TaoDeFrame.h>
+
+#include <boost/shared_ptr.hpp>
 
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
@@ -60,7 +67,7 @@ namespace tutsim {
     static void timer_cb(void * param);
     
     enum {
-      A1, A2, A3, L1, L2, L3, R1, R2, R3, NDOF
+      LINK1, LINK2, LINK3, LINK4, NDOF
     };
     
     taoDNode const * node_[NDOF];
@@ -83,11 +90,11 @@ namespace tutsim {
   };
   
   
-  static jspace::Model * model;
+  static boost::shared_ptr<jspace::tao_tree_info_s> tao_tree;
   static bool (*servo_cb)(size_t toggle_count,
 			  double wall_time_ms,
 			  double sim_time_ms,
-			  jspace::State const & state,
+			  jspace::State & state,
 			  jspace::Vector & command);
   static jspace::State state;
   static size_t ndof;
@@ -96,14 +103,40 @@ namespace tutsim {
   static double sim_rate_hz;
   
   
+  static void write_state_to_tao_tree()
+  {
+    for (size_t ii(0); ii < ndof; ++ii) {
+      taoJoint * joint(tao_tree->info[ii].joint);
+      int const kk(tao_tree->info[ii].id);
+      joint->setQ(&(state.position_.coeffRef(kk)));
+      joint->setDQ(&(state.velocity_.coeffRef(kk)));
+      joint->zeroDDQ();
+      joint->zeroTau();
+    }
+    taoDynamics::updateTransformation(tao_tree->root);
+  }
+  
+  
+  static void read_state_from_tao_tree()
+  {
+    for (size_t ii(0); ii < ndof; ++ii) {
+      taoJoint * joint(tao_tree->info[ii].joint);
+      int const kk(tao_tree->info[ii].id);
+      joint->getQ(&(state.position_.coeffRef(kk)));
+      joint->getDQ(&(state.velocity_.coeffRef(kk)));
+      joint->getTau(&(state.force_.coeffRef(kk)));
+    }
+  }
+  
+  
   int run(double _gfx_rate_hz,
 	  double _servo_rate_hz,
 	  double _sim_rate_hz,
-	  jspace::Model * _model,
+	  std::string const & robot_filename,
 	  bool (*_servo_cb)(size_t toggle_count,
 			    double wall_time_ms,
 			    double sim_time_ms,
-			    jspace::State const & state,
+			    jspace::State & state,
 			    jspace::Vector & command),
 	  int width, int height, char const * title)
   {
@@ -113,14 +146,23 @@ namespace tutsim {
     if (_servo_rate_hz <= 0.0) {
       errx(EXIT_FAILURE, "invalid servo_rate_hz %g (must be > 0)", _servo_rate_hz);
     }
+    
+    try {
+      jspace::test::BRParser brp;
+      jspace::test::BranchingRepresentation * brep(brp.parse(robot_filename));
+      tao_tree.reset(brep->createTreeInfo());
+    }
+    catch (std::runtime_error const & ee) {
+      errx(EXIT_FAILURE, "%s", ee.what());
+    }
+    
     gfx_rate_hz = _gfx_rate_hz;
     servo_rate_hz = _servo_rate_hz;
     sim_rate_hz = _sim_rate_hz;
-    model = _model;
     servo_cb = _servo_cb;
-    ndof = model->getNDOF();
+    ndof = tao_tree->info.size();
     state.init(ndof, ndof, ndof);
-    model->update(state);
+    write_state_to_tao_tree();
     Window win(width, height, title);
     return Fl::run();
   }
@@ -144,33 +186,34 @@ namespace tutsim {
   }
   
   
+  static taoDNode * find_node(std::string const & name)
+  {
+    for (size_t ii(0); ii < ndof; ++ii) {
+      if (name == tao_tree->info[ii].link_name) {
+	return  tao_tree->info[ii].node;
+      }
+    }
+    errx(EXIT_FAILURE, "node `%s' not found", name.c_str());
+  }
+  
+  
   void Simulator::
   draw()
   {
     if ( ! node_[0]) {
       Fl::add_timeout(0.1, timer_cb, this);
-      node_[A1] = model->getNodeByName("a1");
-      node_[A2] = model->getNodeByName("a2");
-      node_[A3] = model->getNodeByName("a3");
-      node_[L1] = model->getNodeByName("l1");
-      node_[L2] = model->getNodeByName("l2");
-      node_[L3] = model->getNodeByName("l3");
-      node_[R1] = model->getNodeByName("r1");
-      node_[R2] = model->getNodeByName("r2");
-      node_[R3] = model->getNodeByName("r3");
-      for (size_t ii(0); ii < NDOF; ++ii) {
-	if ( ! node_[ii]) {
-	  errx(EXIT_FAILURE, "tutsim::Simulator::draw(): missing node");
-	}
-      }
+      node_[LINK1] = find_node("link1");
+      node_[LINK2] = find_node("link2");
+      node_[LINK3] = find_node("link3");
+      node_[LINK4] = find_node("link4");
     }
     
     double scale;
     if (w() > h()) {
-      scale = h() / 7.06;
+      scale = h() / 9.0;
     }
     else {
-      scale = w() / 7.06;
+      scale = w() / 9.0;
     }
     double const x0(w() / 2.0);
     double const y0(h() / 2.0);
@@ -179,57 +222,41 @@ namespace tutsim {
     fl_rectf(x(), y(), w(), h());
     
     fl_color(FL_WHITE);
-    fl_line(x0 + (node_[A1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[A1]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[A2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[A2]->frameGlobal()->translation()[2] * scale));
-    fl_line(x0 + (node_[A2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[A2]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[A3]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[A3]->frameGlobal()->translation()[2] * scale));
-    fl_line(x0 + (node_[L1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[L1]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[R1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[R1]->frameGlobal()->translation()[2] * scale));
+    fl_line_style(FL_SOLID, 3, 0);
     
-    fl_color(FL_RED);
-    fl_line(x0 + (node_[R1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[R1]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[R2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[R2]->frameGlobal()->translation()[2] * scale));
-    fl_line(x0 + (node_[R2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[R2]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[R3]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[R3]->frameGlobal()->translation()[2] * scale));
-    deFrame loc;
-    loc.translation()[1] = -0.15;
-    deFrame aglob;
-    aglob.multiply(*(node_[R3]->frameGlobal()), loc);
-    loc.translation()[1] = 0.15;
-    deFrame bglob;
-    bglob.multiply(*(node_[R3]->frameGlobal()), loc);
-    fl_line(x0 + (aglob.translation()[1] * scale),
-	    y0 - (aglob.translation()[2] * scale),
-	    x0 + (bglob.translation()[1] * scale),
-	    y0 - (bglob.translation()[2] * scale));
+    fl_line(x0 + (node_[LINK1]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK1]->frameGlobal()->translation()[2] * scale),
+	    x0 + (node_[LINK2]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK2]->frameGlobal()->translation()[2] * scale));
+    fl_line(x0 + (node_[LINK2]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK2]->frameGlobal()->translation()[2] * scale),
+	    x0 + (node_[LINK3]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK3]->frameGlobal()->translation()[2] * scale));
+    fl_line(x0 + (node_[LINK3]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK3]->frameGlobal()->translation()[2] * scale),
+	    x0 + (node_[LINK4]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK4]->frameGlobal()->translation()[2] * scale));
+    deFrame locframe;
+    locframe.translation()[2] = -1.0;
+    deFrame globframe;
+    globframe.multiply(*(node_[LINK4]->frameGlobal()), locframe);
+    fl_line(x0 + (node_[LINK4]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK4]->frameGlobal()->translation()[2] * scale),
+	    x0 + (globframe.translation()[1] * scale),
+	    y0 - (globframe.translation()[2] * scale));
     
     fl_color(FL_GREEN);
-    fl_line(x0 + (node_[L1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[L1]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[L2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[L2]->frameGlobal()->translation()[2] * scale));
-    fl_line(x0 + (node_[L2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[L2]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[L3]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[L3]->frameGlobal()->translation()[2] * scale));
-    loc.translation()[1] = -0.15;
-    aglob.multiply(*(node_[L3]->frameGlobal()), loc);
-    loc.translation()[1] = 0.15;
-    bglob.multiply(*(node_[L3]->frameGlobal()), loc);
-    fl_line(x0 + (aglob.translation()[1] * scale),
-	    y0 - (aglob.translation()[2] * scale),
-	    x0 + (bglob.translation()[1] * scale),
-	    y0 - (bglob.translation()[2] * scale));
+    deVector3 globpoint;
+    globpoint.multiply(*(node_[LINK1]->frameGlobal()), *(node_[LINK1]->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+    globpoint.multiply(*(node_[LINK2]->frameGlobal()), *(node_[LINK2]->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+    globpoint.multiply(*(node_[LINK3]->frameGlobal()), *(node_[LINK3]->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+    globpoint.multiply(*(node_[LINK4]->frameGlobal()), *(node_[LINK4]->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+
+    fl_line_style(FL_SOLID, 1, 0);
   }
   
   
@@ -274,30 +301,31 @@ namespace tutsim {
     }
     
     jspace::Vector command;
+    read_state_from_tao_tree();
     if ( ! servo_cb(toggle_count_, wall_time_ms, sim_time_ms, state, command)) {
-      state = model->getState();
+      write_state_to_tao_tree();
     }
     else {
       if (command.rows() != ndof) {
 	errx(EXIT_FAILURE, "invalid command dimension %d (should be %zu)", command.rows(), ndof);
       }
-      state.force_ = command;	// could ramp it or clamp it or...
-      jspace::Matrix ainv;
-      jspace::Vector gg, bb, ddq;
+      jspace::Vector ddq(ndof);
       for (size_t ii(0); ii < sim_nsteps; ++ii) {
-	if ( ! model->getInverseMassInertia(ainv)) {
-	  errx(EXIT_FAILURE, "model->getInverseMassInertia() failed");
+	static deVector3 earth_gravity(0.0, 0.0, -9.81);
+	for (size_t kk(0); kk < ndof; ++kk) {
+	  // is this necessary each kk?
+	  tao_tree->info[kk].joint->setTau(&(command.coeffRef(tao_tree->info[kk].id)));
 	}
-	if ( ! model->getGravity(gg)) {
-	  errx(EXIT_FAILURE, "model->getGravity() failed");
+	taoDynamics::fwdDynamics(tao_tree->root, &earth_gravity);
+	for (size_t kk(0); kk < ndof; ++kk) {
+	  tao_tree->info[kk].joint->getDDQ(&(ddq.coeffRef(tao_tree->info[kk].id)));
 	}
-	if ( ! model->getCoriolisCentrifugal(bb)) {
-	  errx(EXIT_FAILURE, "model->getCoriolisCentrifugal() failed");
-	}
-	ddq = ainv * (state.force_ - bb - gg);
+	////	add_command_to_tao_tree(command);
+	////	taoDynamics::integrate(tao_tree->root, sim_dt);
+	////	taoDynamics::updateTransformation(tao_tree->root);
 	state.velocity_ += sim_dt * ddq;
 	state.position_ += sim_dt * state.velocity_;
-	model->update(state);
+	write_state_to_tao_tree();
       }
     }
     
