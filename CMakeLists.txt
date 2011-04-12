@@ -176,6 +176,7 @@ subdirs (
   stanford_wbc
   reflexxes_otg
   opspace
+  util
   )
 
 if (HAVE_M3)
