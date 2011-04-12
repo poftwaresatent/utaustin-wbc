@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2011 Roland Philippsen <roland DOT philippsen AT gmx DOT net>
+ * Copyright (c) 2011 Stanford University. All rights reserved.
+ *                    Author: Roland Philippsen
  *
  * BSD license:
  * Redistribution and use in source and binary forms, with or without

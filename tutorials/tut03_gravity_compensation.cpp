@@ -37,11 +37,11 @@
 #include <err.h>
 
 
-namespace tut02 {
+namespace tut03 {
   
   class JTask : public opspace::Task {
   public:
-    JTask() : opspace::Task("tut02::JTask") {}
+    JTask() : opspace::Task("tut03::JTask"), enable_gravity_compensation_(false) {}
     
     virtual jspace::Status init(jspace::Model const & model)
     {
@@ -58,18 +58,9 @@ namespace tut02 {
       kd_ = 20.0;
       
       //////////////////////////////////////////////////
-      // Initialize our goal to a configuration that is the current
-      // one +/- 45 degrees on each joint.
+      // Initialize our goal to the current configuration.
       
       goal_ = model.getState().position_;
-      for (int ii(0); ii < goal_.rows(); ++ii) {
-	if (0 == (ii % 2)) {
-	  goal_[ii] += M_PI / 4.0;
-	}
-	else {
-	  goal_[ii] -= M_PI / 4.0;
-	}
-      }
       
       //////////////////////////////////////////////////
       // No initialization problems to report: the default constructor
@@ -91,14 +82,24 @@ namespace tut02 {
       
       //////////////////////////////////////////////////
       // Compute PD control torques and store them in command_ for
-      // later retrieval.
-
+      // later retrieval. If enabled, add the estimated effect of
+      // gravity in order to make the robot behave as if was
+      // weightless.
+      
       command_ = kp_ * (goal_ - actual_) - kd_ * model.getState().velocity_;
+      if (enable_gravity_compensation_) {
+	jspace::Vector gg;
+	if ( ! model.getGravity(gg)) {
+	  return jspace::Status(false, "failed to retrieve gravity torque");
+	}
+	command_ += gg;
+      }
       
       jspace::Status ok;
       return ok;
     }
     
+    bool enable_gravity_compensation_;
     double kp_, kd_;
     jspace::Vector goal_;
   };
@@ -108,7 +109,7 @@ namespace tut02 {
 
 static std::string model_filename(TUTROB_XML_PATH_STR);
 static boost::shared_ptr<jspace::Model> model;
-static boost::shared_ptr<tut02::JTask> jtask;
+static boost::shared_ptr<tut03::JTask> jtask;
 
 
 static bool servo_cb(size_t toggle_count,
@@ -117,52 +118,74 @@ static bool servo_cb(size_t toggle_count,
 		     jspace::State & state,
 		     jspace::Vector & command)
 {
-  static size_t prev_toggle(1234);
-  
-  if (0 == (toggle_count % 2)) {
+  size_t const mode(toggle_count % 3);
+  static size_t prevmode(0);
+
+  if (0 == mode) {
     
     //////////////////////////////////////////////////
-    // Send torques that make the robot sway around.
+    // Re-initialize simulator with a configuration so we can test the
+    // task from various starting states.
     
-    command = -3.0 * state.velocity_;
-    command[0] = 40.0 * sin(1e-3 * sim_time_ms);
-    
-  }
-  else {
-    
-    model->update(state);
-    
-    //////////////////////////////////////////////////
-    // Use our JTask to compute the command, re-initializing it
-    // whenever we switch here from the "swaying" mode, and setting
-    // the goal to zero every other time.
-    
-    if (prev_toggle != toggle_count) {
-      jtask->init(*model);
-      if (3 == (toggle_count % 4)) {
-	jtask->goal_ = jspace::Vector::Zero(state.position_.rows());
-      }
+    for (int ii(0); ii < state.position_.rows(); ++ii) {
+      static double const amplitude(0.5 * M_PI);
+      double const phase((1.0 + 0.1 * ii) * 1e-3 * wall_time_ms);
+      state.position_[ii] = amplitude * sin(phase);
+      state.velocity_[ii] = amplitude * cos(phase);
     }
-    jtask->update(*model);
-    command = jtask->getCommand();
+    prevmode = 0;
+    return false;
     
   }
   
-  prev_toggle = toggle_count;
+  //////////////////////////////////////////////////
+  // Update the model to reflect the current robot state.
+  
+  model->update(state);
+  
+  //////////////////////////////////////////////////
+  // Run the jtask, but re-initialize it whenever we start a new
+  // cycle of trials, and switch gravity compensation on/off to
+  // illustrate its effects.
+  
+  if (mode != prevmode) {
+    if (0 == prevmode) {
+      jtask->init(*model);
+    }
+    if (1 == mode) {
+      jtask->enable_gravity_compensation_ = true;
+    }
+    else {
+      jtask->enable_gravity_compensation_ = false;
+    }
+  }
+  prevmode = mode;
+  
+  jtask->update(*model);
+  command = jtask->getCommand();
   
   //////////////////////////////////////////////////
   // Print debug info from time to time.
   
   static size_t iteration(0);
   if (0 == (iteration % 100)) {
-    std::cerr << "toggle: " << toggle_count << "  sim_time_ms: " << sim_time_ms << "\n";
-    if (0 != (toggle_count % 2)) {
-      jspace::pretty_print(jtask->goal_, std::cerr, "goal", "  ");
+    switch (mode) {
+    case 0:
+      std::cerr << "mode: re-init simul\n";
+      break;
+    case 1:
+      std::cerr << "mode: jtask with gravity compensation\n";
+      jspace::pretty_print(jtask->goal_, std::cerr, "  goal", "    ");
+      break;
+    default:
+      std::cerr << "mode: jtask without gravity compensation\n";
+      jspace::pretty_print(jtask->goal_, std::cerr, "  goal", "    ");
+      break;
     }
-    jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
-    jspace::pretty_print(state.velocity_, std::cerr, "jvel", "  ");
-    jspace::pretty_print(state.force_, std::cerr, "jforce", "  ");
-    jspace::pretty_print(command, std::cerr, "command", "  ");
+    jspace::pretty_print(state.position_, std::cerr, "  jpos", "    ");
+    jspace::pretty_print(state.velocity_, std::cerr, "  jvel", "    ");
+    jspace::pretty_print(state.force_, std::cerr, "  jforce", "    ");
+    jspace::pretty_print(command, std::cerr, "  command", "    ");
   }
   ++iteration;
   
@@ -174,7 +197,7 @@ int main(int argc, char ** argv)
 {
   try {
     model.reset(jspace::test::parse_sai_xml_file(model_filename, true));
-    jtask.reset(new tut02::JTask());
+    jtask.reset(new tut03::JTask());
   }
   catch (std::runtime_error const & ee) {
     errx(EXIT_FAILURE, "%s", ee.what());

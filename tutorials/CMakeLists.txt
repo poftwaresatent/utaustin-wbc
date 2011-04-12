@@ -22,3 +22,6 @@ target_link_libraries (tut01_joint_coupling tut opspace jspace_test yaml-cpp ${F
 
 add_executable (tut02_jtask tut02_jtask.cpp)
 target_link_libraries (tut02_jtask tut opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
+
+add_executable (tut03_gravity_compensation tut03_gravity_compensation.cpp)
+target_link_libraries (tut03_gravity_compensation tut opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
