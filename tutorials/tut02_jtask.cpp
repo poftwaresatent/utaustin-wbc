@@ -126,7 +126,6 @@ static bool servo_cb(size_t toggle_count,
     command = jspace::Vector::Zero(state.position_.rows());
     command[0] = 1e-3 * sin(1e-3 * sim_time_ms);
     command[3] = 0.5 * command[0];
-    command[6] = command[3];
     
   }
   else {

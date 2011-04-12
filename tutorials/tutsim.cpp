@@ -67,7 +67,7 @@ namespace tutsim {
     static void timer_cb(void * param);
     
     enum {
-      A1, A2, A3, L1, L2, L3, R1, R2, R3, NDOF
+      LINK1, LINK2, LINK3, LINK4, NDOF
     };
     
     taoDNode const * node_[NDOF];
@@ -202,23 +202,18 @@ namespace tutsim {
   {
     if ( ! node_[0]) {
       Fl::add_timeout(0.1, timer_cb, this);
-      node_[A1] = find_node("a1");
-      node_[A2] = find_node("a2");
-      node_[A3] = find_node("a3");
-      node_[L1] = find_node("l1");
-      node_[L2] = find_node("l2");
-      node_[L3] = find_node("l3");
-      node_[R1] = find_node("r1");
-      node_[R2] = find_node("r2");
-      node_[R3] = find_node("r3");
+      node_[LINK1] = find_node("link1");
+      node_[LINK2] = find_node("link2");
+      node_[LINK3] = find_node("link3");
+      node_[LINK4] = find_node("link4");
     }
     
     double scale;
     if (w() > h()) {
-      scale = h() / 7.06;
+      scale = h() / 9.0;
     }
     else {
-      scale = w() / 7.06;
+      scale = w() / 9.0;
     }
     double const x0(w() / 2.0);
     double const y0(h() / 2.0);
@@ -227,57 +222,41 @@ namespace tutsim {
     fl_rectf(x(), y(), w(), h());
     
     fl_color(FL_WHITE);
-    fl_line(x0 + (node_[A1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[A1]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[A2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[A2]->frameGlobal()->translation()[2] * scale));
-    fl_line(x0 + (node_[A2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[A2]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[A3]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[A3]->frameGlobal()->translation()[2] * scale));
-    fl_line(x0 + (node_[L1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[L1]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[R1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[R1]->frameGlobal()->translation()[2] * scale));
+    fl_line_style(FL_SOLID, 3, 0);
     
-    fl_color(FL_RED);
-    fl_line(x0 + (node_[R1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[R1]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[R2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[R2]->frameGlobal()->translation()[2] * scale));
-    fl_line(x0 + (node_[R2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[R2]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[R3]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[R3]->frameGlobal()->translation()[2] * scale));
-    deFrame loc;
-    loc.translation()[1] = -0.15;
-    deFrame aglob;
-    aglob.multiply(*(node_[R3]->frameGlobal()), loc);
-    loc.translation()[1] = 0.15;
-    deFrame bglob;
-    bglob.multiply(*(node_[R3]->frameGlobal()), loc);
-    fl_line(x0 + (aglob.translation()[1] * scale),
-	    y0 - (aglob.translation()[2] * scale),
-	    x0 + (bglob.translation()[1] * scale),
-	    y0 - (bglob.translation()[2] * scale));
+    fl_line(x0 + (node_[LINK1]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK1]->frameGlobal()->translation()[2] * scale),
+	    x0 + (node_[LINK2]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK2]->frameGlobal()->translation()[2] * scale));
+    fl_line(x0 + (node_[LINK2]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK2]->frameGlobal()->translation()[2] * scale),
+	    x0 + (node_[LINK3]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK3]->frameGlobal()->translation()[2] * scale));
+    fl_line(x0 + (node_[LINK3]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK3]->frameGlobal()->translation()[2] * scale),
+	    x0 + (node_[LINK4]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK4]->frameGlobal()->translation()[2] * scale));
+    deFrame locframe;
+    locframe.translation()[2] = -1.0;
+    deFrame globframe;
+    globframe.multiply(*(node_[LINK4]->frameGlobal()), locframe);
+    fl_line(x0 + (node_[LINK4]->frameGlobal()->translation()[1] * scale),
+	    y0 - (node_[LINK4]->frameGlobal()->translation()[2] * scale),
+	    x0 + (globframe.translation()[1] * scale),
+	    y0 - (globframe.translation()[2] * scale));
     
     fl_color(FL_GREEN);
-    fl_line(x0 + (node_[L1]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[L1]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[L2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[L2]->frameGlobal()->translation()[2] * scale));
-    fl_line(x0 + (node_[L2]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[L2]->frameGlobal()->translation()[2] * scale),
-	    x0 + (node_[L3]->frameGlobal()->translation()[1] * scale),
-	    y0 - (node_[L3]->frameGlobal()->translation()[2] * scale));
-    loc.translation()[1] = -0.15;
-    aglob.multiply(*(node_[L3]->frameGlobal()), loc);
-    loc.translation()[1] = 0.15;
-    bglob.multiply(*(node_[L3]->frameGlobal()), loc);
-    fl_line(x0 + (aglob.translation()[1] * scale),
-	    y0 - (aglob.translation()[2] * scale),
-	    x0 + (bglob.translation()[1] * scale),
-	    y0 - (bglob.translation()[2] * scale));
+    deVector3 globpoint;
+    globpoint.multiply(*(node_[LINK1]->frameGlobal()), *(node_[LINK1]->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+    globpoint.multiply(*(node_[LINK2]->frameGlobal()), *(node_[LINK2]->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+    globpoint.multiply(*(node_[LINK3]->frameGlobal()), *(node_[LINK3]->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+    globpoint.multiply(*(node_[LINK4]->frameGlobal()), *(node_[LINK4]->center()));
+    fl_point(x0 + (globpoint[1] * scale), y0 - (globpoint[2] * scale));
+
+    fl_line_style(FL_SOLID, 1, 0);
   }
   
   
