@@ -40,32 +40,26 @@ static bool servo_cb(size_t toggle_count,
 		     jspace::Vector & command)
 {
   if (0 == (toggle_count % 2)) {
-    command = -100.0 * state.position_ - 10.0 * state.velocity_;
+    command = -400.0 * state.position_ - 20.0 * state.velocity_;
   }
   else {
     command = jspace::Vector::Zero(state.position_.rows());
     int const idx(command.rows() - 1);
-    double dq_des(10.0);
+    double dq_des(15.0);
     if (fmod(sim_time_ms, 4e3) > 2e3) {
       dq_des = -dq_des;
     }
-    command[idx] = dq_des - state.velocity_[idx];
+    command[idx] = dq_des - 2.0 * state.velocity_[idx];
   }
   
-  double const cmax(20.0);
-  for (int idx(0); idx < command.rows(); ++idx) {
-    if (command[idx] > cmax) {
-      command[idx] = cmax;
-    }
-    else if (command[idx] < -cmax) {
-      command[idx] = -cmax;
-    }
+  static size_t iteration(0);
+  if (0 == (iteration++ % 100)) {
+    std::cerr << "sim_time_ms: " << sim_time_ms << "\n";
+    jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
+    jspace::pretty_print(state.velocity_, std::cerr, "jvel", "  ");
+    jspace::pretty_print(command, std::cerr, "command", "  ");
   }
   
-  std::cerr << "sim_time_ms: " << sim_time_ms << "\n";
-  jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
-  jspace::pretty_print(state.velocity_, std::cerr, "jvel", "  ");
-  jspace::pretty_print(command, std::cerr, "command", "  ");
   return true;
 }
 
