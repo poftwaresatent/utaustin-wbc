@@ -196,10 +196,11 @@ namespace opspace {
     virtual Status check(std::string const * param, std::string const & value) const;
     
     inline void quickSetup(Vector const & kp, Vector const & kd, Vector const & maxvel,
-			   std::string const & name)
+			   std::string const & name, Vector const & control_point)
     {
       PDTask::quickSetup(kp, kd, maxvel);
       end_effector_name_ = name;
+      control_point_ = control_point;
     }
     
   protected:
