@@ -71,6 +71,7 @@ static jspace::State state;
 static size_t ndof;
 static size_t toggle_count(0);
 static double servo_dt_ms;
+static bool paused(false);
 
 
 static bool (*servo_cb)(size_t toggle_count,
@@ -105,9 +106,11 @@ namespace {
     
     Simulator * simulator;
     Fl_Button * toggle;
+    Fl_Button * pause;
     Fl_Button * quit;
     
     static void cb_toggle(Fl_Widget * widget, void * param);
+    static void cb_pause(Fl_Widget * widget, void * param);
     static void cb_quit(Fl_Widget * widget, void * param);
   };
   
@@ -351,7 +354,9 @@ namespace {
   void Simulator::
   timer_cb(void * param)
   {
-    reinterpret_cast<Simulator*>(param)->tick();
+    if ( ! paused) {
+      reinterpret_cast<Simulator*>(param)->tick();
+    }
     Fl::repeat_timeout(1e-3 * servo_dt_ms, // gets initialized within tick()
 		       timer_cb,
 		       param);
@@ -366,6 +371,8 @@ namespace {
     simulator = new Simulator(0, 0, width, height - 40);
     toggle = new Fl_Button(5, height - 35, 100, 30, "&Toggle");
     toggle->callback(cb_toggle);
+    pause = new Fl_Button(width / 2 - 50, height - 35, 100, 30, "&Pause");
+    pause->callback(cb_pause);
     quit = new Fl_Button(width - 105, height - 35, 100, 30, "&Quit");
     quit->callback(cb_quit, this);
     end();
@@ -380,6 +387,7 @@ namespace {
     Fl_Window::resize(x, y, w, h);
     simulator->resize(0, 0, w, h - 40);
     toggle->resize(5, h-35, 100, 30);
+    pause->resize(w/2-50, h-35, 100, 30);
     quit->resize(w-105, h-35, 100, 30);
   }
   
@@ -388,6 +396,18 @@ namespace {
   cb_toggle(Fl_Widget * widget, void * param)
   {
     ++toggle_count;
+  }
+  
+  
+  void Window::
+  cb_pause(Fl_Widget * widget, void * param)
+  {
+    if (paused) {
+      paused = false;
+    }
+    else {
+      paused = true;
+    }
   }
   
   
