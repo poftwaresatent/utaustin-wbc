@@ -54,8 +54,8 @@ namespace tut02 {
       //////////////////////////////////////////////////
       // Initialize our PD parameters.
       
-      kp_ = 100.0;
-      kd_ = 20.0;
+      kp_ = 400.0;
+      kd_ = 40.0;
       
       //////////////////////////////////////////////////
       // Initialize our goal to a configuration that is the current
@@ -109,6 +109,7 @@ namespace tut02 {
 static std::string model_filename(TUTROB_XML_PATH_STR);
 static boost::shared_ptr<jspace::Model> model;
 static boost::shared_ptr<tut02::JTask> jtask;
+static size_t mode(0);
 
 
 static bool servo_cb(size_t toggle_count,
@@ -118,8 +119,9 @@ static bool servo_cb(size_t toggle_count,
 		     jspace::Vector & command)
 {
   static size_t prev_toggle(1234);
+  mode = toggle_count % 2;
   
-  if (0 == (toggle_count % 2)) {
+  if (0 == mode) {
     
     //////////////////////////////////////////////////
     // Send torques that make the robot sway around.
@@ -161,12 +163,20 @@ static bool servo_cb(size_t toggle_count,
     }
     jspace::pretty_print(state.position_, std::cerr, "jpos", "  ");
     jspace::pretty_print(state.velocity_, std::cerr, "jvel", "  ");
-    jspace::pretty_print(state.force_, std::cerr, "jforce", "  ");
     jspace::pretty_print(command, std::cerr, "command", "  ");
   }
   ++iteration;
   
   return true;
+}
+
+
+static void draw_cb(double x0, double y0, double scale)
+{
+  if (0 != mode) {
+    tutsim::draw_robot(jtask->goal_, 2, 100, 80, 80, x0, y0, scale);
+    tutsim::draw_delta_jpos(jtask->goal_, 1, 120, 120, 80, x0, y0, scale);
+  }
 }
 
 
@@ -179,5 +189,6 @@ int main(int argc, char ** argv)
   catch (std::runtime_error const & ee) {
     errx(EXIT_FAILURE, "%s", ee.what());
   }
+  tutsim::set_draw_cb(draw_cb);
   return tutsim::run(servo_cb);
 }
