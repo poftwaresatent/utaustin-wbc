@@ -63,9 +63,10 @@ static bool servo_cb(size_t toggle_count,
     
     for (int ii(0); ii < state.position_.rows(); ++ii) {
       static double const amplitude(0.5 * M_PI);
-      double const phase((1.0 + 0.1 * ii) * 1e-3 * wall_time_ms);
-      state.position_[ii] = amplitude * sin(phase);
-      state.velocity_[ii] = amplitude * cos(phase);
+      double const omega(1.0 + 0.1 * ii);
+      double const phase(omega * 1e-3 * wall_time_ms);
+      state.position_[ii] =         amplitude * sin(phase);
+      state.velocity_[ii] = omega * amplitude * cos(phase);
     }
     prevmode = mode;
     return false;
@@ -85,19 +86,19 @@ static bool servo_cb(size_t toggle_count,
   }
   if (2 == mode) {
     static jspace::Vector pos(3), vel(3);
-    double const py(2.0 * 1e-5 * wall_time_ms);
-    double const pz(3.7 * 1e-5 * wall_time_ms);
-    pos << 0.0,	3.0 * sin(py), 3.0 * sin(pz);
-    vel << 0.0,	3.0 * cos(py), 3.0 * cos(pz);
+    static double const oy(0.2);
+    static double const oz(0.37);
+    static double const amp(2.5);
+    double const py(oy * 1e-3 * wall_time_ms);
+    double const pz(oz * 1e-3 * wall_time_ms);
+    pos << 0.0,	     amp * sin(py),      amp * sin(pz);
+    vel << 0.0,	oy * amp * cos(py), oz * amp * cos(pz);
     if ( ! goalpos->set(pos)) {
-      errx(EXIT_FAILURE, "failed to set goal position");
+      errx(EXIT_FAILURE, "failed to set end-effector goal position");
     }
-    //// Setting a goal velocity produces very bad tracking
-    //// behavior... maybe because we are not doing "proper" opspace
-    //// control, but this needs to be investigated.
-    // if ( ! goalvel->set(vel)) {
-    //   errx(EXIT_FAILURE, "failed to set goal velocity");
-    // }
+    if ( ! goalvel->set(vel)) {
+      errx(EXIT_FAILURE, "failed to set end-effector goal velocity");
+    }
   }
   
   task->update(*model);
@@ -166,10 +167,10 @@ int main(int argc, char ** argv)
     model.reset(jspace::test::parse_sai_xml_file(model_filename, true));
     task.reset(new opspace::CartPosTask("tut05"));
     jspace::Vector kp(1), kd(1), maxvel(1), ctrlpt(3);
-    kp << 100;
-    kd << 20;
-    maxvel << 1000;
-    ctrlpt << 0, 0, -1;
+    kp << 400.0;
+    kd << 40.0;
+    maxvel << 1.0;
+    ctrlpt << 0.0, 0.0, -1.0;
     task->quickSetup(kp, kd, maxvel, "link4", ctrlpt);
     
     //////////////////////////////////////////////////
