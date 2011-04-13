@@ -72,6 +72,13 @@ namespace opspace {
     */
     virtual Status check(Vector const * param, Vector const & value) const;
     
+    inline void quickSetup(Vector const & kp, Vector const & kd, Vector const & maxvel)
+    {
+      kp_ = kd;
+      kd_ = kd;
+      maxvel_ = maxvel;
+    }
+    
   protected:
     /**
        Velocity saturation policy.
@@ -187,6 +194,13 @@ namespace opspace {
     virtual Status init(Model const & model);
     virtual Status update(Model const & model);
     virtual Status check(std::string const * param, std::string const & value) const;
+    
+    inline void quickSetup(Vector const & kp, Vector const & kd, Vector const & maxvel,
+			   std::string const & name)
+    {
+      PDTask::quickSetup(kp, kd, maxvel);
+      end_effector_name_ = name;
+    }
     
   protected:
     std::string end_effector_name_;
