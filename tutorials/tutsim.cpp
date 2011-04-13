@@ -46,7 +46,7 @@
 #include <boost/shared_ptr.hpp>
 
 #include <FL/Fl.H>
-#include <FL/Fl_Window.H>
+#include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Button.H>
 #include <FL/fl_draw.H>
 
@@ -98,7 +98,7 @@ namespace {
   };
   
   
-  class Window : public Fl_Window {
+  class Window : public Fl_Double_Window {
   public:
     Window(int width, int height, const char * title);
     
@@ -365,8 +365,9 @@ namespace {
   
   Window::
   Window(int width, int height, const char * title)
-    : Fl_Window(width, height, title)
+    : Fl_Double_Window(width, height, title)
   {
+    Fl::visual(FL_DOUBLE|FL_INDEX);
     begin();
     simulator = new Simulator(0, 0, width, height - 40);
     toggle = new Fl_Button(5, height - 35, 100, 30, "&Toggle");
