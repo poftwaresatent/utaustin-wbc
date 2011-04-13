@@ -41,6 +41,8 @@
 static std::string model_filename(TUTROB_XML_PATH_STR);
 static boost::shared_ptr<jspace::Model> model;
 static boost::shared_ptr<opspace::CartPosTask> task;
+static opspace::Parameter * goalpos;
+static opspace::Parameter * goalvel;
 static size_t mode;
 
 
@@ -50,7 +52,7 @@ static bool servo_cb(size_t toggle_count,
 		     jspace::State & state,
 		     jspace::Vector & command)
 {
-  mode = toggle_count % 2;
+  mode = toggle_count % 3;
   static size_t prevmode(42);
   static size_t iteration(0);
   
@@ -80,6 +82,22 @@ static bool servo_cb(size_t toggle_count,
     if ( ! st) {
       errx(EXIT_FAILURE, "task->init() failed: %s", st.errstr.c_str());
     }
+  }
+  if (2 == mode) {
+    static jspace::Vector pos(3), vel(3);
+    double const py(2.0 * 1e-5 * wall_time_ms);
+    double const pz(3.7 * 1e-5 * wall_time_ms);
+    pos << 0.0,	3.0 * sin(py), 3.0 * sin(pz);
+    vel << 0.0,	3.0 * cos(py), 3.0 * cos(pz);
+    if ( ! goalpos->set(pos)) {
+      errx(EXIT_FAILURE, "failed to set goal position");
+    }
+    //// Setting a goal velocity produces very bad tracking
+    //// behavior... maybe because we are not doing "proper" opspace
+    //// control, but this needs to be investigated.
+    // if ( ! goalvel->set(vel)) {
+    //   errx(EXIT_FAILURE, "failed to set goal velocity");
+    // }
   }
   
   task->update(*model);
@@ -114,35 +132,30 @@ static void draw_cb(double x0, double y0, double scale)
 {
   if (0 != mode) {
     
-    // Here's an example of how to use the parameter reflection aspect
-    // of the opspace library. We get a pointer to the goalpos
-    // parameter, and plot it using fltk's low-level drawing
-    // routines. Here we know to expect a vector parameter, so we use
-    // the more stringent version of lookupParameter().
-    
-    static opspace::Parameter const * goalpos(0);
-    if ( ! goalpos) {
-      goalpos = task->lookupParameter("goalpos", opspace::PARAMETER_TYPE_VECTOR);
-      if ( ! goalpos) {
-	errx(EXIT_FAILURE, "failed to find appropriate goalpos parameter");
-      }
-    }
-    
+    //////////////////////////////////////////////////
     // Remember: we plot the YZ plane, X is sticking out of the screen
     // but the robot is planar anyway.
     
-    double const gx(goalpos->getVector()->y());
-    double const gy(goalpos->getVector()->z());
     fl_color(255, 100, 100);
     fl_line_style(FL_SOLID, 1, 0);
-    fl_line(x0 + (gx + 0.2) * scale, y0 - gy * scale,
-	    x0 + (gx - 0.2) * scale, y0 - gy * scale);
-    fl_line(x0 + gx * scale, y0 - (gy + 0.2) * scale,
-	    x0 + gx * scale, y0 - (gy - 0.2) * scale);
+    
+    double const gx(goalpos->getVector()->y());
+    double const gy(goalpos->getVector()->z());
     int const rr(ceil(0.15 * scale));
     int const dd(2 * rr);
     fl_arc(int(x0 + gx * scale) - rr, int(y0 - gy * scale) - rr, dd, dd, 0.0, 360.0);
     
+    double const vx(goalvel->getVector()->y());
+    double const vy(goalvel->getVector()->z());
+    double const px(gx + vx * 0.1);
+    double const py(gy + vy * 0.1);
+    fl_line(x0 + (gx + 0.2) * scale, y0 - gy * scale,
+	    x0 + (gx - 0.2) * scale, y0 - gy * scale);
+    fl_line(x0 + gx * scale, y0 - (gy + 0.2) * scale,
+	    x0 + gx * scale, y0 - (gy - 0.2) * scale);
+    fl_color(255, 255, 100);
+    fl_line(x0 + gx * scale, y0 - gy * scale,
+	    x0 + px * scale, y0 - py * scale);
   }
 }
 
@@ -158,6 +171,24 @@ int main(int argc, char ** argv)
     maxvel << 1000;
     ctrlpt << 0, 0, -1;
     task->quickSetup(kp, kd, maxvel, "link4", ctrlpt);
+    
+    //////////////////////////////////////////////////
+    // Here's an example of how to use the parameter reflection aspect
+    // of the opspace library. We get a pointer to the goalpos and
+    // goalvel parameters, which allows us direct read/write access to
+    // them, e.g. for plotting of the end-effector goal position. Here
+    // we know to expect a vector parameter, so we use the more
+    // stringent version of lookupParameter().
+    
+    goalpos = task->lookupParameter("goalpos", opspace::PARAMETER_TYPE_VECTOR);
+    if ( ! goalpos) {
+      errx(EXIT_FAILURE, "failed to find appropriate goalpos parameter");
+    }
+    goalvel = task->lookupParameter("goalvel", opspace::PARAMETER_TYPE_VECTOR);
+    if ( ! goalvel) {
+      errx(EXIT_FAILURE, "failed to find appropriate goalvel parameter");
+    }
+    
   }
   catch (std::runtime_error const & ee) {
     errx(EXIT_FAILURE, "%s", ee.what());
