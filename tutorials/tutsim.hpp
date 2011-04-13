@@ -93,6 +93,14 @@ struct tutsim {
 			 double x0, double y0, double scale);
   
   /**
+     Draw the difference between the current simulated robot
+     configuration and the given jpos.
+  */
+  static void draw_delta_jpos(jspace::Vector const & jpos, int width,
+			      unsigned char red, unsigned char green, unsigned char blue,
+			      double x0, double y0, double scale);
+  
+  /**
      Set a custom function for drawing additional information. Use
      e.g. draw_robot(), or you can emit raw fltk drawing commands. In
      the latter case, you need to take into account the x0, y0, and

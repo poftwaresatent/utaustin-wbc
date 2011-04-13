@@ -138,15 +138,30 @@ namespace {
   }
   
   
-  static void read_state_from_tree(jspace::tao_tree_info_s const & tree)
+  static void read_state_from_tree(jspace::tao_tree_info_s const & tree,
+				   jspace::Vector * jpos,
+				   jspace::Vector * jvel,
+				   jspace::Vector * jfrc)
   {
     for (size_t ii(0); ii < ndof; ++ii) {
       taoJoint const * joint(tree.info[ii].joint);
       int const kk(tree.info[ii].id);
-      joint->getQ(&(state.position_.coeffRef(kk)));
-      joint->getDQ(&(state.velocity_.coeffRef(kk)));
-      joint->getTau(&(state.force_.coeffRef(kk)));
+      if (jpos) {
+	joint->getQ(&(jpos->coeffRef(kk)));
+      }
+      if (jvel) {
+	joint->getDQ(&(jvel->coeffRef(kk)));
+      }
+      if (jfrc) {
+	joint->getTau(&(jfrc->coeffRef(kk)));
+      }
     }
+  }
+  
+  
+  static void read_state_from_tree(jspace::tao_tree_info_s const & tree)
+  {
+    read_state_from_tree(tree, &(state.position_), &(state.velocity_), &(state.force_));
   }
   
   
@@ -421,6 +436,60 @@ draw_robot(jspace::Vector const & jpos, int width,
   fl_color(red, green, blue);
   fl_line_style(FL_SOLID, width, 0);
   raw_draw_tree(*scratch_tree, x0, y0, scale);
+  fl_line_style(0);		// back to default
+}
+
+
+void tutsim::
+draw_delta_jpos(jspace::Vector const & jpos, int width,
+		unsigned char red, unsigned char green, unsigned char blue,
+		double x0, double y0, double scale)
+{
+  if (0 > id1) {
+    id1 = find_node(*sim_tree, "link1")->getID();
+    id2 = find_node(*sim_tree, "link2")->getID();
+    id3 = find_node(*sim_tree, "link3")->getID();
+    id4 = find_node(*sim_tree, "link4")->getID();
+  }
+  
+  jspace::Vector scratchpos(sim_tree->info.size());
+  read_state_from_tree(*sim_tree, &scratchpos, 0, 0);
+  
+  fl_color(red, green, blue);
+  fl_line_style(FL_SOLID, width, 0);
+  
+  scratchpos[id4] = jpos[id4];
+  write_state_to_tree(&scratchpos, 0, *scratch_tree);
+  deFrame locframe;
+  locframe.translation()[2] = -1.0;
+  deFrame globframe;
+  globframe.multiply(*(scratch_tree->info[id4].node->frameGlobal()), locframe);
+  fl_line(x0 + (scratch_tree->info[id4].node->frameGlobal()->translation()[1] * scale),
+	  y0 - (scratch_tree->info[id4].node->frameGlobal()->translation()[2] * scale),
+	  x0 + (globframe.translation()[1] * scale),
+	  y0 - (globframe.translation()[2] * scale));
+  
+  scratchpos[id3] = jpos[id3];
+  write_state_to_tree(&scratchpos, 0, *scratch_tree);
+  fl_line(x0 + (scratch_tree->info[id3].node->frameGlobal()->translation()[1] * scale),
+	  y0 - (scratch_tree->info[id3].node->frameGlobal()->translation()[2] * scale),
+	  x0 + (scratch_tree->info[id4].node->frameGlobal()->translation()[1] * scale),
+	  y0 - (scratch_tree->info[id4].node->frameGlobal()->translation()[2] * scale));
+  
+  scratchpos[id2] = jpos[id2];
+  write_state_to_tree(&scratchpos, 0, *scratch_tree);
+  fl_line(x0 + (scratch_tree->info[id2].node->frameGlobal()->translation()[1] * scale),
+	  y0 - (scratch_tree->info[id2].node->frameGlobal()->translation()[2] * scale),
+	  x0 + (scratch_tree->info[id3].node->frameGlobal()->translation()[1] * scale),
+	  y0 - (scratch_tree->info[id3].node->frameGlobal()->translation()[2] * scale));
+  
+  scratchpos[id1] = jpos[id1];
+  write_state_to_tree(&scratchpos, 0, *scratch_tree);
+  fl_line(x0 + (scratch_tree->info[id1].node->frameGlobal()->translation()[1] * scale),
+	  y0 - (scratch_tree->info[id1].node->frameGlobal()->translation()[2] * scale),
+	  x0 + (scratch_tree->info[id2].node->frameGlobal()->translation()[1] * scale),
+	  y0 - (scratch_tree->info[id2].node->frameGlobal()->translation()[2] * scale));
+
   fl_line_style(0);		// back to default
 }
 

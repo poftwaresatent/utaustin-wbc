@@ -69,7 +69,7 @@ static bool servo_cb(size_t toggle_count,
     static double const amplitude(0.5 * M_PI);
     double const omega(1.0 + 0.1 * ii);
     double const phase(omega * 1e-3 * wall_time_ms);
-    jpos[ii] = amplitude * sin(phase);
+    jpos[ii] =         amplitude * sin(phase);
     jvel[ii] = omega * amplitude * cos(phase);
   }
   
@@ -150,6 +150,8 @@ static bool servo_cb(size_t toggle_count,
 static void draw_cb(double x0, double y0, double scale)
 {
   if (0 != mode) {
+    
+    tutsim::draw_delta_jpos(*jgoalpos->getVector(), 1, 100, 80, 80, x0, y0, scale);
     
     //////////////////////////////////////////////////
     // Remember: we plot the YZ plane, X is sticking out of the screen
