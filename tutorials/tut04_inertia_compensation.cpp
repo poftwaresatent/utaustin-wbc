@@ -165,10 +165,11 @@ static bool servo_cb(size_t toggle_count,
   jtask->goalpos_.resize(state.position_.rows());
   jtask->goalvel_.resize(state.position_.rows());
   for (int ii(0); ii < state.position_.rows(); ++ii) {
-    static double const amplitude(0.5 * M_PI);
-    double const phase((1.0 + 0.1 * ii) * 1e-3 * wall_time_ms);
-    jtask->goalpos_[ii] = amplitude * sin(phase);
-    jtask->goalvel_[ii] = amplitude * cos(phase);
+    static double const amplitude(0.9 * M_PI);
+    double const omega(0.5 + 0.3 * ii);
+    double const phase(omega * 1e-3 * wall_time_ms);
+    jtask->goalpos_[ii] =         amplitude * sin(phase);
+    jtask->goalvel_[ii] = omega * amplitude * cos(phase);
   }
   
   static size_t iteration(0);
@@ -236,7 +237,6 @@ static bool servo_cb(size_t toggle_count,
     jspace::pretty_print(state.position_, std::cerr, "  jpos", "    ");
     jspace::pretty_print(jtask->goalvel_, std::cerr, "  goalvel", "    ");
     jspace::pretty_print(state.velocity_, std::cerr, "  jvel", "    ");
-    jspace::pretty_print(state.force_, std::cerr, "  jforce", "    ");
     jspace::pretty_print(command, std::cerr, "  command", "    ");
   }
   ++iteration;
@@ -249,6 +249,7 @@ static void draw_cb(double x0, double y0, double scale)
 {
   if (0 != jtask->goalpos_.rows()) {
     tutsim::draw_robot(jtask->goalpos_, 1, 100, 255, 100, x0, y0, scale);
+    tutsim::draw_delta_jpos(jtask->goalpos_, 1, 100, 255, 255, x0, y0, scale);
   }
 }
 
