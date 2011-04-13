@@ -216,6 +216,9 @@ namespace opspace {
       // skip inactive tasks at beginning of table
       if ((0 == jac.rows()) || (0 == jac.cols())) {
 	++first_active_task_index;
+	if (first_active_task_index >= tasks->size()) {
+	  return Status(false, "no active tasks (all Jacobians are empty)");
+	}
 	////	sv_lstar_[ii].resize(0);
 	sv_jstar_[ii].resize(0);
 	continue;
@@ -230,7 +233,18 @@ namespace opspace {
       }
       
       Matrix jjt(jstar * jstar.transpose());
+      
+      //////////////////////////////////////////////////
+      // If Eigen ends up freeing a non-allocated pointer on the line
+      // below: that appears to happen on zero-rank matrices when you
+      // do an SVD (at least that's my best guess while writing this
+      // comment). Maybe you have a task hierarchy with entries after
+      // all degrees of freedom have been eaten up, or maybe you have
+      // a task more than one in the hierarchy. This should not
+      // trigger a segfault, and/or it should be detected earlier, but
+      // this effect is a bit obscure for now.
       sv_jstar_[ii] = Eigen::SVD<Matrix>(jjt).singularValues();
+      
       st = skill.checkJStarSV(task, sv_jstar_[ii]);
       if ( ! st) {
 	fallback_ = true;
