@@ -28,3 +28,6 @@ target_link_libraries (tut03_gravity_compensation tut opspace jspace_test yaml-c
 
 add_executable (tut04_inertia_compensation tut04_inertia_compensation.cpp)
 target_link_libraries (tut04_inertia_compensation tut opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
+
+add_executable (tut05_eepos tut05_eepos.cpp)
+target_link_libraries (tut05_eepos tut opspace jspace_test yaml-cpp ${FLTK_LIBRARIES})
