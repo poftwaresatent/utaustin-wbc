@@ -110,6 +110,7 @@ namespace tut03 {
 static std::string model_filename(TUTROB_XML_PATH_STR);
 static boost::shared_ptr<jspace::Model> model;
 static boost::shared_ptr<tut03::JTask> jtask;
+static size_t mode(0);
 
 
 static bool servo_cb(size_t toggle_count,
@@ -118,9 +119,9 @@ static bool servo_cb(size_t toggle_count,
 		     jspace::State & state,
 		     jspace::Vector & command)
 {
-  size_t const mode(toggle_count % 3);
+  mode = toggle_count % 3;
   static size_t prevmode(0);
-
+  
   if (0 == mode) {
     
     //////////////////////////////////////////////////
@@ -129,9 +130,10 @@ static bool servo_cb(size_t toggle_count,
     
     for (int ii(0); ii < state.position_.rows(); ++ii) {
       static double const amplitude(0.5 * M_PI);
-      double const phase((1.0 + 0.1 * ii) * 1e-3 * wall_time_ms);
-      state.position_[ii] = amplitude * sin(phase);
-      state.velocity_[ii] = amplitude * cos(phase);
+      double const omega(1.0 + 0.1 * ii);
+      double const phase(omega * 1e-3 * wall_time_ms);
+      state.position_[ii] =         amplitude * sin(phase);
+      state.velocity_[ii] = omega * amplitude * cos(phase);
     }
     prevmode = 0;
     return false;
@@ -184,7 +186,6 @@ static bool servo_cb(size_t toggle_count,
     }
     jspace::pretty_print(state.position_, std::cerr, "  jpos", "    ");
     jspace::pretty_print(state.velocity_, std::cerr, "  jvel", "    ");
-    jspace::pretty_print(state.force_, std::cerr, "  jforce", "    ");
     jspace::pretty_print(command, std::cerr, "  command", "    ");
   }
   ++iteration;
@@ -195,8 +196,9 @@ static bool servo_cb(size_t toggle_count,
 
 static void draw_cb(double x0, double y0, double scale)
 {
-  if (0 != jtask->goal_.rows()) {
-    tutsim::draw_robot(jtask->goal_, 1, 100, 80, 80, x0, y0, scale);
+  if (0 != mode) {
+    tutsim::draw_robot(jtask->goal_, 2, 100, 80, 80, x0, y0, scale);
+    tutsim::draw_delta_jpos(jtask->goal_, 1, 120, 120, 80, x0, y0, scale);
   }
 }
 
