@@ -234,16 +234,21 @@ namespace opspace {
       
       Matrix jjt(jstar * jstar.transpose());
       
-      //////////////////////////////////////////////////
-      // If Eigen ends up freeing a non-allocated pointer on the line
-      // below: that appears to happen on zero-rank matrices when you
-      // do an SVD (at least that's my best guess while writing this
-      // comment). Maybe you have a task hierarchy with entries after
-      // all degrees of freedom have been eaten up, or maybe you have
-      // a task more than one in the hierarchy. This should not
-      // trigger a segfault, and/or it should be detected earlier, but
-      // this effect is a bit obscure for now.
-      sv_jstar_[ii] = Eigen::SVD<Matrix>(jjt).singularValues();
+      if (1 == jjt.rows()) {	// work around limitations of Eigen2 SVD.
+	sv_jstar_[ii] = Vector::Ones(1, 1) * jjt.coeff(0, 0);
+      }
+      else {
+	//////////////////////////////////////////////////
+	// If Eigen ends up freeing a non-allocated pointer on the line
+	// below: that appears to happen on zero-rank matrices when you
+	// do an SVD (at least that's my best guess while writing this
+	// comment). Maybe you have a task hierarchy with entries after
+	// all degrees of freedom have been eaten up, or maybe you have
+	// a task more than one in the hierarchy. This should not
+	// trigger a segfault, and/or it should be detected earlier, but
+	// this effect is a bit obscure for now.
+	sv_jstar_[ii] = Eigen::SVD<Matrix>(jjt).singularValues();
+      }
       
       st = skill.checkJStarSV(task, sv_jstar_[ii]);
       if ( ! st) {
