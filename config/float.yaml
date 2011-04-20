@@ -1,0 +1,11 @@
+- tasks:
+  - type: opspace::JPosTask
+    name: jpos
+    kp: [ 0.0 ]
+    kd: [ 3.0 ]
+    maxvel: [ 3.1416 ]
+- skills:
+  - type: opspace::GenericSkill
+    name: generic
+    slots:
+    - task: jpos
