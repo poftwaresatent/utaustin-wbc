@@ -59,43 +59,30 @@ well.
 
 Start the Meka/RTAI controller (you may first need to `su -l` to the
 account under which M3_ROBOT resides due to log file ownership
-issues):
+issues), passing it the -m flag to put it into torque/shm control
+mode:
 
-    m3rt_server_run
+    m3rt_server_run -m
 
-Start the script which switches the controller to shared memory mode:
+Make sure the robot's safety button is OFF, then start the
+`m3_apps/servo` program. Use its `-h` option to get a help message.
 
-    /path/to/opspace/apps/m3_torque_shm.py
-   
-This should create some messages from the Meka/RTAI controller as
-well. Hit ENTER to continue in the `m3_torque_shm.py` terminal.
+    cd /path/to/opspace/release
+    ./m3_apps/servo -f ../config/m3_with_hand.xml -s ../config/float.yaml -v
 
-Start the `m3_servo` program, for instance in gravity compensation
-mode (which is the default) with a bit of damping. Use the `-h` option
-for more details:
+Hold on to the robot and switch the safety button on.
 
-    /path/to/opspace/release/apps/m3_servo -l float -d '2 2 2 2  1 1 1'
+Note that you can stop and restart the `m3_apps/servo` without
+restarting the `m3rt_server_run` process. However, if you do want to
+stop and restart everything, the following **shutdown sequence** needs
+to be strictly followed in order to avoid creating zombie RTAI
+processes:
 
-If this complains about a missing SAI XML file, add `-f
-/path/to/opspace/robospecs/m3_with_hand.xml` to the command line.
-
-Make sure the robot's safety button is OFF. Back in the
-`m3_torque_shm.py` terminal, hit the `a` key. Hold on to the robot and
-switch the safety button on.
-
-The following **shutdown sequence** needs to be strictly followed in
-order to avoid creating zombie RTAI processes:
-
- 1. Hit `q` in the `m3_torque_shm.py` terminal.
- 2. Hit Ctrl-C in the `m3_servo` terminal.
- 3. Hit Ctrl-C in the `m3rt_server_run` terminal.
- 4. Run `m3rt_server_kill` if that fails (or run it all the time
+ 1. Hit Ctrl-C in the `m3_servo` terminal.
+ 2. Hit Ctrl-C in the `m3rt_server_run` terminal.
+ 3. Run `m3rt_server_kill` if that fails (or run it all the time
     anyway just for good measure).
 
-Run the following to get the "vertical wall sweeping example" (see
-http://www.youtube.com/watch?v=bU7Ocphhifg):
-
-    ./apps/m3_servo -t -g "0.4 -0.2 -0.2    0 45 0 60    0 0 0" -p "150 150 150     100 100 100 100    100 100 100 " -d "20 20 20   5 5 5 5   25 25 25"
 
 License
 -------
