@@ -68,7 +68,7 @@ Make sure the robot's safety button is OFF, then start the
 `m3_apps/servo` program. Use its `-h` option to get a help message.
 
     cd /path/to/opspace/release
-    ./m3_apps/servo -f ../config/m3_with_hand.xml -s ../config/float.yaml -v
+    ./m3_apps/servo -r ../config/m3_with_hand.xml -s ../config/float.yaml -v
 
 Hold on to the robot and switch the safety button on.
 
