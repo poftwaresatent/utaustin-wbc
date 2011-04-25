@@ -1,7 +1,7 @@
 /*
  * Stanford Whole-Body Control Framework http://stanford-wbc.sourceforge.net/
  *
- * Copyright (c) 2010 Stanford University. All rights reserved.
+ * Copyright (C) 2010 The Board of Trustees of The Leland Stanford Junior University. All rights reserved.
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -64,6 +64,11 @@ namespace jspace {
     */
     void resizeAndPadWithZeros(size_t npos, size_t nvel, size_t nforce);
     
+    /**
+       Compares two states for equality. You can specify which aspects
+       of the state should be considered relevant, and also a
+       precision for comparing floating point values.
+    */
     bool equal(State const & rhs,
 	       int flags = COMPARE_POSITION | COMPARE_VELOCITY,
 	       double precision = 1e-3) const;
