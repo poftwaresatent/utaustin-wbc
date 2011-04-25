@@ -61,7 +61,8 @@ TEST (parse, tasks_only)
     "    maxacc: [ 6.2832 ]\n";
   
   try {
-    Factory factory(&cout);
+    Factory::setDebugStream(&cout);
+    Factory factory;
     Status st;
     st = factory.parseString(yaml_string);
     EXPECT_TRUE (st.ok) << st.errstr;
@@ -129,7 +130,8 @@ TEST (parse, tasks_and_skills)
     "      posture: posture_notrj\n";
   
   try {
-    Factory factory(&cout);
+    Factory::setDebugStream(&cout);
+    Factory factory;
     Status st;
     st = factory.parseString(yaml_string);
     EXPECT_TRUE (st.ok) << st.errstr;

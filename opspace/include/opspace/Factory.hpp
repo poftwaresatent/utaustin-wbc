@@ -25,6 +25,7 @@
 #include <jspace/Status.hpp>
 #include <boost/shared_ptr.hpp>
 #include <vector>
+#include <map>
 
 
 namespace opspace {
@@ -35,12 +36,22 @@ namespace opspace {
   class Skill;
   class ReflectionRegistry;
   
-  /**
-     \todo Replace this with some sort of plugin-based approach.
-  */
-  Task * createTask(std::string const & type, std::string const & name);
   
-  Skill * createSkill(std::string const & type, std::string const & name);
+  template<typename base_type>
+  struct ShopAPI {
+    virtual ~ShopAPI() {}
+    virtual base_type * create(std::string const & name) = 0;
+  };
+  
+  template<typename task_subtype>
+  struct TaskShop : public ShopAPI<Task> {
+    virtual Task * create(std::string const & name) { return new task_subtype(name); }
+  };
+  
+  template<typename skill_subtype>
+  struct SkillShop : public ShopAPI<Skill> {
+    virtual Skill * create(std::string const & name) { return new skill_subtype(name); }
+  };
   
   
   /**
@@ -105,11 +116,21 @@ namespace opspace {
     typedef std::vector<boost::shared_ptr<Task> > task_table_t;
     typedef std::vector<boost::shared_ptr<Skill> > skill_table_t;
     
-    /**
-       If you pass a non-zero dbg parameter, the Factory will
-       print all sorts of debug information to that stream.
-    */
-    explicit Factory(std::ostream * dbg = 0) : dbg_(dbg) {}
+    static void setDebugStream(std::ostream * dbg);
+    
+    template<typename task_subtype>
+    static void addTaskType(std::string const & type) {
+      task_shop__[type].reset(new TaskShop<task_subtype>());
+    }
+    
+    template<typename skill_subtype>
+    static void addSkillType(std::string const & type) {
+      skill_shop__[type].reset(new SkillShop<skill_subtype>());
+    }
+    
+    static Task * createTask(std::string const & type, std::string const & name);
+    
+    static Skill * createSkill(std::string const & type, std::string const & name);
     
     /**
        Parse a YAML document contained in a string. Retrieve the
@@ -161,7 +182,13 @@ namespace opspace {
 	      std::string const & prefix) const;
     
   protected:
-    std::ostream * dbg_;
+    typedef std::map<std::string, boost::shared_ptr<ShopAPI<Task> > > task_shop_t;
+    typedef std::map<std::string, boost::shared_ptr<ShopAPI<Skill> > > skill_shop_t;
+
+    static std::ostream * dbg__;
+    static task_shop_t task_shop__;
+    static skill_shop_t skill_shop__;
+    
     task_table_t task_table_;
     skill_table_t skill_table_;
   };

@@ -224,7 +224,7 @@ namespace opspace {
     if (parser.dbg) {
       *parser.dbg << "  type = " << parser.type << "  name = " << parser.name << "\n";
     }
-    parser.task = createTask(parser.type, parser.name);
+    parser.task = Factory::createTask(parser.type, parser.name);
     if ( ! parser.task) {
       throw std::runtime_error("createTask(`" + parser.type + "', `" + parser.name + "') failed");
     }
@@ -267,7 +267,7 @@ namespace opspace {
     if (parser.dbg) {
       *parser.dbg << "  type = " << parser.type << "  name = " << parser.name << "\n";
     }
-    parser.skill = createSkill(parser.type, parser.name);
+    parser.skill = Factory::createSkill(parser.type, parser.name);
     if ( ! parser.skill) {
       throw std::runtime_error("createSkill(`" + parser.type + "', `" + parser.name + "') failed");
     }

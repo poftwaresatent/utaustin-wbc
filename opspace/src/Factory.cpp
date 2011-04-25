@@ -32,39 +32,79 @@ using jspace::pretty_print;
 
 namespace opspace {
   
+
+  static bool shops_initialized__(false);
   
-  /**
-     \todo Make this e.g. a non-static member function and use a
-     dictionary of subclass creators in order to support adding
-     name-type mappings at runtime.
-  */
-  Task * createTask(std::string const & type, std::string const & name)
+  static void init_shops()
   {
-    if ("opspace::SelectedJointPostureTask" == type) {
-      return new opspace::SelectedJointPostureTask(name);
+    if (shops_initialized__) {
+      return;
     }
-    if ("opspace::CartPosTrjTask" == type) {
-      return new opspace::CartPosTrjTask(name);
+    shops_initialized__ = true;
+    
+    Factory::addTaskType<opspace::SelectedJointPostureTask>("opspace::SelectedJointPostureTask");
+    Factory::addTaskType<opspace::CartPosTrjTask>("opspace::CartPosTrjTask");
+    Factory::addTaskType<opspace::JPosTrjTask>("opspace::JPosTrjTask");
+    Factory::addTaskType<opspace::CartPosTask>("opspace::CartPosTask");
+    Factory::addTaskType<opspace::JPosTask>("opspace::JPosTask");
+    Factory::addTaskType<opspace::JointLimitTask>("opspace::JointLimitTask");
+    Factory::addTaskType<opspace::OrientationTask>("opspace::OrientationTask");
+    Factory::addTaskType<opspace::DraftPIDTask>("opspace::DraftPIDTask");
+
+    Factory::addSkillType<opspace::GenericSkill>("opspace::GenericSkill");
+    Factory::addSkillType<opspace::TaskPostureSkill>("opspace::TaskPostureSkill");
+    Factory::addSkillType<opspace::TaskPostureTrjSkill>("opspace::TaskPostureTrjSkill");
+    Factory::addSkillType<opspace::HelloGoodbyeSkill>("opspace::HelloGoodbyeSkill");
+  }
+  
+  
+  std::ostream * Factory::dbg__(0);
+  Factory::task_shop_t Factory::task_shop__;
+  Factory::skill_shop_t Factory::skill_shop__;
+  
+  
+  void Factory::
+  setDebugStream(std::ostream * dbg)
+  {
+    dbg__ = dbg;
+  }
+  
+  
+  Task * Factory::
+  createTask(std::string const & type, std::string const & name)
+  {
+    init_shops();
+    task_shop_t::iterator ii(task_shop__.find(type));
+    if (task_shop__.end() == ii) {
+      if (dbg__) {
+	(*dbg__) << "Factory::createTask(): no task type `" << type << "'\n"
+		 << "  registered types are:\n";
+	for (ii = task_shop__.begin(); ii != task_shop__.end(); ++ii) {
+	  (*dbg__) << "    " << ii->first << "\n";
+	}
+      }
+      return 0;
     }
-    if ("opspace::JPosTrjTask" == type) {
-      return new opspace::JPosTrjTask(name);
+    return ii->second->create(name);
+  }
+  
+  
+  Skill * Factory::
+  createSkill(std::string const & type, std::string const & name)
+  {
+    init_shops();
+    skill_shop_t::iterator ii(skill_shop__.find(type));
+    if (skill_shop__.end() == ii) {
+      if (dbg__) {
+	(*dbg__) << "Factory::createSkill(): no skill type `" << type << "'\n"
+		 << "  registered types are:\n";
+	for (ii = skill_shop__.begin(); ii != skill_shop__.end(); ++ii) {
+	  (*dbg__) << "    " << ii->first << "\n";
+	}
+      }
+      return 0;
     }
-    if ("opspace::CartPosTask" == type) {
-      return new opspace::CartPosTask(name);
-    }
-    if ("opspace::JPosTask" == type) {
-      return new opspace::JPosTask(name);
-    }
-    if ("opspace::JointLimitTask" == type) {
-      return new opspace::JointLimitTask(name);
-    }
-    if ("opspace::OrientationTask" == type) {
-      return new opspace::OrientationTask(name);
-    }
-    if ("opspace::DraftPIDTask" == type) {
-      return new opspace::DraftPIDTask(name);
-    }
-    return 0;
+    return ii->second->create(name);
   }
   
   
@@ -96,8 +136,8 @@ namespace opspace {
     try {
       YAML::Parser parser(yaml_istream);
       YAML::Node doc;
-      TaskTableParser task_table_parser(*this, task_table_, dbg_);
-      SkillTableParser skill_table_parser(*this, skill_table_, dbg_);
+      TaskTableParser task_table_parser(*this, task_table_, dbg__);
+      SkillTableParser skill_table_parser(*this, skill_table_, dbg__);
       
       parser.GetNextDocument(doc); // <sigh>this'll have merge conflicts again</sigh>
       //while (parser.GetNextDocument(doc)) {
@@ -123,15 +163,15 @@ namespace opspace {
       }
     }
     catch (YAML::Exception const & ee) {
-      if (dbg_) {
-	*dbg_ << "YAML::Exception: " << ee.what() << "\n";
+      if (dbg__) {
+	*dbg__ << "YAML::Exception: " << ee.what() << "\n";
       }
       st.ok = false;
       st.errstr = ee.what();
     }
     catch (std::runtime_error const & ee) {
-      if (dbg_) {
-	*dbg_ << "std::runtime_error: " << ee.what() << "\n";
+      if (dbg__) {
+	*dbg__ << "std::runtime_error: " << ee.what() << "\n";
       }
       st.ok = false;
       st.errstr = ee.what();
@@ -199,24 +239,6 @@ namespace opspace {
       }
     }
     return boost::shared_ptr<Skill>();
-  }
-  
-  
-  Skill * createSkill(std::string const & type, std::string const & name)
-  {
-    if ("opspace::GenericSkill" == type) {
-      return new opspace::GenericSkill(name);
-    }
-    if ("opspace::TaskPostureSkill" == type) {
-      return new opspace::TaskPostureSkill(name);
-    }
-    if ("opspace::TaskPostureTrjSkill" == type) {
-      return new opspace::TaskPostureTrjSkill(name);
-    }
-    if ("opspace::HelloGoodbyeSkill" == type) {
-      return new opspace::HelloGoodbyeSkill(name);
-    }
-    return 0;
   }
   
   
