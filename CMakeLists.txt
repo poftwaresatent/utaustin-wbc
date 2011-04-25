@@ -193,6 +193,7 @@ subdirs (
   stanford_wbc
   reflexxes_otg
   opspace
+  uta_opspace
   util
   )
 

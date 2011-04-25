@@ -23,7 +23,6 @@
 #include <opspace/Skill.hpp>
 #include <opspace/task_library.hpp>
 #include <opspace/skill_library.hpp>
-#include <opspace/HelloGoodbyeSkill.hpp>
 #include <opspace/parse_yaml.hpp>
 #include <fstream>
 #include <stdexcept>
@@ -54,7 +53,6 @@ namespace opspace {
     Factory::addSkillType<opspace::GenericSkill>("opspace::GenericSkill");
     Factory::addSkillType<opspace::TaskPostureSkill>("opspace::TaskPostureSkill");
     Factory::addSkillType<opspace::TaskPostureTrjSkill>("opspace::TaskPostureTrjSkill");
-    Factory::addSkillType<opspace::HelloGoodbyeSkill>("opspace::HelloGoodbyeSkill");
   }
   
   

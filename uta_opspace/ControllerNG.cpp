@@ -23,7 +23,7 @@
  * <http://www.gnu.org/licenses/>
  */
 
-#include <opspace/ControllerNG.hpp>
+#include "ControllerNG.hpp"
 #include <opspace/pseudo_inverse.hpp>
 
 // hmm...
@@ -34,7 +34,7 @@
 using jspace::pretty_print;
 using boost::shared_ptr;
 
-namespace opspace {
+namespace uta_opspace {
   
   
   ControllerNG::

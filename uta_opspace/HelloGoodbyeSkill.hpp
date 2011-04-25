@@ -23,13 +23,15 @@
  * <http://www.gnu.org/licenses/>
  */
 
-#ifndef OPSPACE_HELLO_GOODBYE_SKILL_HPP
-#define OPSPACE_HELLO_GOODBYE_SKILL_HPP
+#ifndef UTA_OPSPACE_HELLO_GOODBYE_SKILL_HPP
+#define UTA_OPSPACE_HELLO_GOODBYE_SKILL_HPP
 
 #include <opspace/Skill.hpp>
 #include <opspace/task_library.hpp>
 
-namespace opspace {
+namespace uta_opspace {
+  
+  using namespace opspace;
   
   
   class HelloGoodbyeSkill
@@ -89,4 +91,4 @@ namespace opspace {
   
 }
 
-#endif // OPSPACE_HELLO_GOODBYE_SKILL_HPP
+#endif // UTA_OPSPACE_HELLO_GOODBYE_SKILL_HPP

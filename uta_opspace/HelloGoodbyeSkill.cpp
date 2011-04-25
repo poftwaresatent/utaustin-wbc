@@ -23,13 +23,13 @@
  * <http://www.gnu.org/licenses/>
  */
 
-#include <opspace/HelloGoodbyeSkill.hpp>
+#include "HelloGoodbyeSkill.hpp"
 #include <opspace/task_library.hpp>
 
 using boost::shared_ptr;
 
 
-namespace opspace {
+namespace uta_opspace {
 
 
   HelloGoodbyeSkill::

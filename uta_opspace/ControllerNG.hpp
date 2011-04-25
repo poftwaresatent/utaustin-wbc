@@ -23,13 +23,15 @@
  * <http://www.gnu.org/licenses/>
  */
 
-#ifndef OPSPACE_CONTROLLER_NG_HPP
-#define OPSPACE_CONTROLLER_NG_HPP
+#ifndef UTA_OPSPACE_CONTROLLER_NG_HPP
+#define UTA_OPSPACE_CONTROLLER_NG_HPP
 
 #include <opspace/Controller.hpp>
 #include <boost/shared_ptr.hpp>
 
-namespace opspace {
+namespace uta_opspace {
+  
+  using namespace opspace;
   
   
   class ControllerNG
@@ -89,4 +91,4 @@ namespace opspace {
 
 }
 
-#endif // OPSPACE_CONTROLLER_NG_HPP
+#endif // UTA_OPSPACE_CONTROLLER_NG_HPP

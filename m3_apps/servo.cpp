@@ -38,13 +38,15 @@
 #include <jspace/test/sai_util.hpp>
 #include <opspace/Skill.hpp>
 #include <opspace/Factory.hpp>
-#include <opspace/controller_library.hpp>
+#include <uta_opspace/ControllerNG.hpp>
+#include <uta_opspace/HelloGoodbyeSkill.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <err.h>
 #include <signal.h>
 #include <sys/time.h>
 
 using namespace wbc_m3_ctrl;
+using namespace uta_opspace;
 using namespace opspace;
 using namespace boost;
 using namespace std;
@@ -294,6 +296,9 @@ int main(int argc, char ** argv)
   if (0 != sigaction(SIGINT, &sa, 0)) {
     err(EXIT_FAILURE, "sigaction");
   }
+  
+#error Blindly added this, please double-check on Meka arm.
+  Factory::addSkillType<uta_opspace::HelloGoodbyeSkill>("uta_opspace::HelloGoodbyeSkill");
   
   keep_running = true;
   parse_options(argc, argv);

@@ -22,7 +22,7 @@
 #include <gtest/gtest.h>
 #include <opspace/task_library.hpp>
 #include <opspace/skill_library.hpp>
-#include <opspace/ControllerNG.hpp>
+#include <opspace/ClassicTaskPostureController.hpp>
 #include <jspace/test/model_library.hpp>
 #include <err.h>
 
@@ -141,7 +141,7 @@ TEST (controller, odd_even)
   shared_ptr<Task> jpos;
   Vector gamma_jpos;
   
-  vector<shared_ptr<ControllerNG> > ctrl;
+  vector<shared_ptr<ClassicTaskPostureController> > ctrl;
   vector<shared_ptr<GenericSkill> > gb;
   vector<Vector> gamma;
 
@@ -160,7 +160,7 @@ TEST (controller, odd_even)
     EXPECT_TRUE (st.ok) << "failed to update jpos task: " << st.errstr;
     gamma_jpos = aa * jpos->getCommand() + gg;
     
-    ctrl.push_back(shared_ptr<ControllerNG>(new ControllerNG("blah")));
+    ctrl.push_back(shared_ptr<ClassicTaskPostureController>(new ClassicTaskPostureController("blah")));
     gb.push_back(shared_ptr<GenericSkill>(new GenericSkill("blah")));
     gamma.push_back(Vector::Zero(puma->getNDOF()));
     
@@ -199,7 +199,7 @@ TEST (controller, odd_full)
   shared_ptr<Task> jpos;
   Vector gamma_jpos;
   
-  vector<shared_ptr<ControllerNG> > ctrl;
+  vector<shared_ptr<ClassicTaskPostureController> > ctrl;
   vector<shared_ptr<GenericSkill> > gb;
   vector<Vector> gamma;
 
@@ -218,7 +218,7 @@ TEST (controller, odd_full)
     EXPECT_TRUE (st.ok) << "failed to update jpos task: " << st.errstr;
     gamma_jpos = aa * jpos->getCommand() + gg;
     
-    ctrl.push_back(shared_ptr<ControllerNG>(new ControllerNG("blah")));
+    ctrl.push_back(shared_ptr<ClassicTaskPostureController>(new ClassicTaskPostureController("blah")));
     gb.push_back(shared_ptr<GenericSkill>(new GenericSkill("blah")));
     gamma.push_back(Vector::Zero(puma->getNDOF()));
     
@@ -315,7 +315,7 @@ TEST (task, jlimit)
     st = param->set(foo);
     ASSERT_TRUE (st.ok) << "failed to set maxacc: " << st.errstr;
     
-    ControllerNG ctrl("ctrl");
+    ClassicTaskPostureController ctrl("ctrl");
     GenericSkill gb("gb");
     gb.appendTask(jlimit);
     
