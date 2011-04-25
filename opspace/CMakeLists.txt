@@ -7,17 +7,19 @@ include_directories (
   )
 
 add_library (opspace SHARED
-  src/opspace.cpp
+  src/pseudo_inverse.cpp
   src/Parameter.cpp
   src/Task.cpp
   src/Factory.cpp
   src/TypeIOTGCursor.cpp
   src/Controller.cpp
-  src/controller_library.cpp
+  src/ClassicTaskPostureController.cpp
+  src/ControllerNG.cpp
   src/task_library.cpp
   src/skill_library.cpp
   src/parse_yaml.cpp
   src/Skill.cpp
+  src/HelloGoodbyeSkill.cpp
   )
 target_link_libraries (opspace jspace reflexxes_otg yaml-cpp)
 

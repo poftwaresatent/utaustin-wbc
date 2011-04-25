@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Stanford University. All rights reserved.
+ * Copyright (C) 2011 The Board of Trustees of The Leland Stanford Junior University. All rights reserved.
  *                    Author: Roland Philippsen
  *
  * BSD license:

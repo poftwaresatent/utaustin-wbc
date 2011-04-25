@@ -1,8 +1,8 @@
 /*
  * Shared copyright notice and LGPLv3 license statement.
  *
- * Copyright (C) 2011 The Board of Trustees of The Leland Stanford Junior University. All rights reserved.
- * Copyright (C) 2011 University of Texas at Austin. All rights reserved.
+ * Copyright (C) 2010 The Board of Trustees of The Leland Stanford Junior University. All rights reserved.
+ * Copyright (C) 2010 University of Texas at Austin. All rights reserved.
  *
  * Authors: Roland Philippsen (Stanford) and Luis Sentis (UT Austin)
  *          http://cs.stanford.edu/group/manips/
@@ -23,15 +23,27 @@
  * <http://www.gnu.org/licenses/>
  */
 
-#include <opspace/Controller.hpp>
+#ifndef OPSPACE_PSEUDO_INVERSE_HPP
+#define OPSPACE_PSEUDO_INVERSE_HPP
+
+#include <jspace/wrap_eigen.hpp>
 
 namespace opspace {
-  
-  Controller::
-  Controller(std::string const & name)
-    : ParameterReflection("cntrl", name)
-  {
-  }
 
+  using jspace::Matrix;
+  using jspace::Vector;
+  
+  /**
+     This pseudo-inverse is based on SVD, followed by threshlding on
+     the singular values. This is a bit simplistic, but we have found
+     that it works allright for our use cases with a sigmaThreshold of
+     1e-4 or 1e-3.
+  */
+  void pseudoInverse(Matrix const & matrix,
+		     double sigmaThreshold,
+		     Matrix & invMatrix,
+		     Vector * opt_sigmaOut = 0);
+  
 }
 
+#endif // OPSPACE_PSEUDO_INVERSE_HPP

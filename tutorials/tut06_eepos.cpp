@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Stanford University. All rights reserved.
+ * Copyright (C) 2011 The Board of Trustees of The Leland Stanford Junior University. All rights reserved.
  *                    Author: Roland Philippsen
  *
  * BSD license:
@@ -33,7 +33,7 @@
 #include "tutsim.hpp"
 #include <opspace/task_library.hpp>
 #include <opspace/skill_library.hpp>
-#include <opspace/controller_library.hpp>
+#include <opspace/ClassicTaskPostureController.hpp>
 #include <jspace/test/sai_util.hpp>
 #include <boost/shared_ptr.hpp>
 #include <FL/fl_draw.H>
@@ -42,7 +42,7 @@
 
 static std::string model_filename(TUTROB_XML_PATH_STR);
 static boost::shared_ptr<jspace::Model> model;
-static boost::shared_ptr<opspace::ControllerNG> controller;
+static boost::shared_ptr<opspace::ClassicTaskPostureController> controller;
 static boost::shared_ptr<opspace::GenericSkill> skill;
 static boost::shared_ptr<opspace::CartPosTask> eetask;
 static boost::shared_ptr<opspace::JPosTask> jtask;
@@ -221,7 +221,7 @@ int main(int argc, char ** argv)
     skill->appendTask(eetask);
     skill->appendTask(jtask);
 
-    controller.reset(new opspace::ControllerNG("tut06-ctrl"));
+    controller.reset(new opspace::ClassicTaskPostureController("tut06-ctrl"));
     
   }
   catch (std::runtime_error const & ee) {

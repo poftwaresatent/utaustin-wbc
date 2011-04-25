@@ -1,36 +1,22 @@
 /*
- * Whole-Body Control for Human-Centered Robotics http://www.me.utexas.edu/~hcrl/
+ * Copyright (C) 2011 The Board of Trustees of The Leland Stanford Junior University. All rights reserved.
  *
- * Copyright (c) 2011 University of Texas at Austin. All rights reserved.
+ * Author: Roland Philippsen
+ *         http://cs.stanford.edu/group/manips/
  *
- * Authors: Roland Philippsen and Luis Sentis
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- * BSD license:
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the copyright holder nor the names of
- *    contributors to this software may be used to endorse or promote
- *    products derived from this software without specific prior written
- *    permission.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
  *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHORS AND CONTRIBUTORS ``AS IS''
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
- * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
- * PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT
- * HOLDER OR THE CONTRIBUTORS TO THIS SOFTWARE BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this program.  If not, see
+ * <http://www.gnu.org/licenses/>
  */
 
 #ifndef OPSPACE_SKILL_LIBRARY_HPP
@@ -93,62 +79,6 @@ namespace opspace {
     CartPosTrjTask * eepos_;
     JPosTrjTask * posture_;
     task_table_t task_table_;
-  };
-
-
-  class HelloGoodbyeSkill
-    : public Skill
-  {
-  public:
-    HelloGoodbyeSkill(std::string const & name);
-    
-    virtual Status init(Model const & model);
-    virtual Status update(Model const & model);
-    virtual task_table_t const * getTaskTable();
-    virtual Status checkJStarSV(Task const * task, Vector const & sv);
-    
-    void dbg(std::ostream & os,
-	     std::string const & title,
-	     std::string const & prefix) const;
-    
-  protected:
-    enum {
-      STATE_START,
-      STATE_SHAKE,
-      STATE_WAVE_LEFT,
-      STATE_WAVE_RIGHT,
-      STATE_RETURN
-    } state_;
-    
-    //    OrientationTask * shake_eeori_;
-    CartPosTrjTask * shake_eepos_task_;
-    JPosTrjTask * shake_posture_task_;
-    task_table_t shake_task_table_;
-    
-    CartPosTrjTask * wave_eepos_task_;
-    JPosTrjTask * wave_posture_task_;
-    task_table_t wave_task_table_;
-    
-    Parameter * shake_eepos_goal_;
-    Parameter * shake_posture_goal_;
-    Parameter * wave_eepos_goal_;
-    Parameter * wave_posture_goal_;
-    
-    Vector shake_position_;
-    Vector shake_posture_;
-    double shake_distance_;
-    double shake_distance_threshold_;
-    size_t shake_count_;
-    size_t shake_count_threshold_;
-    
-    Vector wave_position_left_;
-    Vector wave_position_right_;
-    Vector wave_posture_;
-    double wave_distance_left_;
-    double wave_distance_right_;
-    double wave_distance_threshold_;
-    size_t wave_count_;
-    size_t wave_count_threshold_;
   };
   
 }

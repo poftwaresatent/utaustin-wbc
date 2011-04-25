@@ -1,12 +1,8 @@
 /*
- * Shared copyright notice and LGPLv3 license statement.
- *
  * Copyright (C) 2011 The Board of Trustees of The Leland Stanford Junior University. All rights reserved.
- * Copyright (C) 2011 University of Texas at Austin. All rights reserved.
  *
- * Authors: Roland Philippsen (Stanford) and Luis Sentis (UT Austin)
- *          http://cs.stanford.edu/group/manips/
- *          http://www.me.utexas.edu/~hcrl/
+ * Author: Roland Philippsen
+ *         http://cs.stanford.edu/group/manips/
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -23,15 +19,41 @@
  * <http://www.gnu.org/licenses/>
  */
 
+#ifndef OPSPACE_CLASSIC_TASK_POSTURE_CONTROLLER_HPP
+#define OPSPACE_CLASSIC_TASK_POSTURE_CONTROLLER_HPP
+
 #include <opspace/Controller.hpp>
+#include <boost/shared_ptr.hpp>
 
 namespace opspace {
   
-  Controller::
-  Controller(std::string const & name)
-    : ParameterReflection("cntrl", name)
+  
+  class ClassicTaskPostureController
+    : public Controller
   {
-  }
+  public:
+    explicit ClassicTaskPostureController(std::string const & name);
+    
+    virtual Status init(Model const & model);
+    
+    virtual Status computeCommand(Model const & model,
+				  Skill & skill,
+				  Vector & gamma);
+
+    virtual void dbg(std::ostream & os,
+		     std::string const & title,
+		     std::string const & prefix) const;
+    
+  protected:
+    Vector jpos_;
+    Vector jvel_;
+    Vector gamma_;
+    Vector fstar_;
+    Matrix lambda_;
+    Matrix jbar_;
+    Matrix nullspace_;
+  };
 
 }
 
+#endif // OPSPACE_CLASSIC_TASK_POSTURE_CONTROLLER_HPP
