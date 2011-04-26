@@ -1,13 +1,15 @@
 include_directories (
+  ../stanford_wbc/opspace/include
   ../stanford_wbc/jspace
   ../stanford_wbc/tao
-  ../reflexxes_otg/include
-  ../yaml-cpp/include
-  ../opspace/include
+  ../stanford_wbc/reflexxes_otg/include
+  ../stanford_wbc/yaml-cpp/include
   .
   )
 
 add_library (uta_opspace SHARED
+  DelayHistogram.cpp
+  strutil.cpp
   ControllerNG.cpp
   HelloGoodbyeSkill.cpp
   )

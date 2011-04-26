@@ -107,67 +107,6 @@ else (HAVE_EIGEN2)
   message (FATAL_ERROR "Please install Eigen2, e.g. `sudo apt-get install libeigen2-dev' or from http://eigen.tuxfamily.org/ and pass -DEIGEN2_DIR:path=/path/to/eigen2 to cmake next time you call it.")
 endif (HAVE_EIGEN2)
 
-# find Boost (just for smart pointers though)
-
-if (BOOST_DIR)
-  list (APPEND CMAKE_REQUIRED_INCLUDES
-    ${BOOST_DIR}/include
-    ${BOOST_DIR}
-    ${BOOST_DIR}/include/boost
-    ${BOOST_DIR}/boost
-    )
-  include_directories (
-    ${BOOST_DIR}/include
-    ${BOOST_DIR}
-    ${BOOST_DIR}/include/boost
-    ${BOOST_DIR}/boost
-    )
-endif (BOOST_DIR)
-check_include_file_cxx (boost/shared_ptr.hpp HAVE_BOOST)
-if (HAVE_BOOST)
-  message ("*** found Boost (required)")
-else (HAVE_BOOST)
-  message (FATAL_ERROR "Please install the Boost smart_ptr library, and/or tell me where to find it by passing -DBOOST_DIR:path=/path/to/boost to cmake next time (you probably need to clear its cache first).")
-endif (HAVE_BOOST)
-
-# gtest (optional)
-
-if (GTEST_SKIP)
-  message ("+++ skipping gtest")
-else (GTEST_SKIP)
-  if (GTEST_DIR)
-    list (APPEND CMAKE_REQUIRED_INCLUDES ${GTEST_DIR}/include ${GTEST_DIR})
-    include_directories (${GTEST_DIR}/include ${GTEST_DIR})
-    link_directories (${GTEST_DIR}/lib ${GTEST_DIR})
-  endif (GTEST_DIR)
-  check_include_file_cxx (gtest/gtest.h HAVE_GTEST_HEADER)
-  if (${HAVE_GTEST_HEADER})
-    if (GTEST_DIR)
-      find_library (HAVE_GTEST_LIB gtest PATHS ${GTEST_DIR} ${GTEST_DIR}/lib)
-    else (GTEST_DIR)
-      find_library (HAVE_GTEST_LIB gtest)
-    endif (GTEST_DIR)
-    if (HAVE_GTEST_LIB MATCHES "NOTFOUND")
-      message (FATAL_ERROR "gtest library not found, although the header gtest/gtest.h was found")
-    else (HAVE_GTEST_LIB MATCHES "NOTFOUND")
-      message ("*** enabling gtest")
-      set (HAVE_GTEST TRUE)
-      add_definitions (-DHAVE_GTEST)
-    endif (HAVE_GTEST_LIB MATCHES "NOTFOUND")
-  else (${HAVE_GTEST_HEADER})
-    message ("--- gtest not found (optional)")
-  endif (${HAVE_GTEST_HEADER})
-endif (GTEST_SKIP)
-
-# fltk (optional, for tutorials)
-
-check_include_file_cxx (FL/Fl.H HAVE_FLTK)
-if (HAVE_FLTK)
-  message ("*** found fltk, enabling tutorials")
-else (HAVE_FLTK)
-  message ("--- fltk not found (optional)")
-endif (HAVE_FLTK)
-
 # detection of Meka / RTAI code
 
 if (M3_DIR)
@@ -189,17 +128,9 @@ endif (${HAVE_M3_SHM_HEADER})
 # NOTE: add new subprojects here!
 
 subdirs (
-  yaml-cpp
   stanford_wbc
-  reflexxes_otg
-  opspace
   uta_opspace
-  util
   )
-
-if (HAVE_FLTK)
-  subdirs (tutorials)
-endif (HAVE_FLTK)
 
 if (HAVE_M3)
   subdirs (m3_apps)

@@ -1,6 +1,6 @@
 include_directories (
-  ../stanford_wbc/jspace
-  ../stanford_wbc/tao
+  ../jspace
+  ../tao
   ../reflexxes_otg/include
   ../yaml-cpp/include
   include
