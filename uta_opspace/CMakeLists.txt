@@ -2,8 +2,8 @@ include_directories (
   ../stanford_wbc/opspace/include
   ../stanford_wbc/jspace
   ../stanford_wbc/tao
-  ../stanford_wbc/reflexxes_otg/include
-  ../stanford_wbc/yaml-cpp/include
+  ../stanford_wbc/3rdparty/reflexxes_otg/include
+  ../stanford_wbc/3rdparty/yaml-cpp/include
   .
   )
 

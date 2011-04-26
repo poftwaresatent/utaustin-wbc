@@ -1,8 +1,8 @@
 include_directories (
   ../jspace
   ../tao
-  ../reflexxes_otg/include
-  ../yaml-cpp/include
+  ../3rdparty/reflexxes_otg/include
+  ../3rdparty/yaml-cpp/include
   include
   )
 

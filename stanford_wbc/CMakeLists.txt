@@ -173,9 +173,9 @@ endif (HAVE_FLTK)
 ### go into subdirs
 
 subdirs (
-  wbc_tinyxml
-  yaml-cpp
-  reflexxes_otg
+  3rdparty/wbc_tinyxml
+  3rdparty/yaml-cpp
+  3rdparty/reflexxes_otg
   tao
   jspace
   opspace
