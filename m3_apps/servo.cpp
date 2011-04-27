@@ -297,7 +297,6 @@ int main(int argc, char ** argv)
     err(EXIT_FAILURE, "sigaction");
   }
   
-#error Blindly added this, please double-check on Meka arm.
   Factory::addSkillType<uta_opspace::HelloGoodbyeSkill>("uta_opspace::HelloGoodbyeSkill");
   
   keep_running = true;
