@@ -339,6 +339,9 @@ int main(int argc, char ** argv)
 	Vector gravity;
 	model->getGravity(gravity);
 	jspace::pretty_print(gravity, cout, "gravity", "  ");
+	Matrix aa;
+	model->getMassInertia(aa);
+	jspace::pretty_print(aa, cout, "jspace inertia", "  ");
 	cout << "servo rate: " << actual_servo_rate << "\n";
       }
     }
