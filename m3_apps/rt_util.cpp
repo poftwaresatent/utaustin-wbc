@@ -120,7 +120,7 @@ namespace wbc_m3_ctrl {
     rt_sem_wait(status_sem);
     memcpy(&shm_status, sys->status, sizeof(shm_status));
     rt_sem_signal(status_sem);
-    for (size_t ii(0); ii < 7; ++ii) { // XXXX to do: hardcoded NDOF
+    for (size_t ii(0); ii < 7; ++ii) {
       state.position_[ii] = M_PI * shm_status.right_arm.theta[ii] / 180.0;
       state.velocity_[ii] = M_PI * shm_status.right_arm.thetadot[ii] / 180.0;
       state.force_[ii] = 1.0e-3 * shm_status.right_arm.torque[ii];
@@ -158,9 +158,10 @@ namespace wbc_m3_ctrl {
       rt_sem_wait(status_sem);
       memcpy(&shm_status, sys->status, sizeof(shm_status));
       rt_sem_signal(status_sem);
-      for (size_t ii(0); ii < 7; ++ii) { // XXXX to do: hardcoded NDOF
+      for (size_t ii(0); ii < 7; ++ii) {
 	state.position_[ii] = M_PI * shm_status.right_arm.theta[ii] / 180.0;
 	state.velocity_[ii] = M_PI * shm_status.right_arm.thetadot[ii] / 180.0;
+	state.force_[ii] = 1.0e-3 * shm_status.right_arm.torque[ii];
       }
       
       cb_status = rtutil->update(state, command);
@@ -171,7 +172,7 @@ namespace wbc_m3_ctrl {
 	continue;
       }
       
-      for (size_t ii(0); ii < 7; ++ii) { // XXXX to do: hardcoded NDOF
+      for (size_t ii(0); ii < 7; ++ii) {
 	shm_cmd.right_arm.tq_desired[ii] = 1.0e3 * command[ii];
       }
       shm_cmd.timestamp = shm_status.timestamp;
